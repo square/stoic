@@ -26,7 +26,7 @@ of every instance of a particular class currently in the heap.
 
 # Example
 ```
-% stoic com.example appexitinfo
+% stoic --pkg com.example appexitinfo
 epoch           timestamp             process-name   reason           importance
 -------------   -------------------   ------------   --------------   ----------
 1716541377356   2024-05-24 02:02:57   com.example    USER_REQUESTED   FOREGROUND
