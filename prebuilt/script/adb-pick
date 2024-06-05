@@ -1,0 +1,30 @@
+#!/bin/bash
+#set -x
+set -euo pipefail
+
+if [ ! -t 0 ]; then
+    >&2 echo "stdin is not a terminal"
+    return 1
+fi
+
+devices=()
+while IFS= read -r line; do
+    devices+=("$line")
+done < <(adb devices | grep -w "device" | cut -f 1)
+
+# Bash indexing starts at 0
+for ((i=0; i<${#devices[@]}; i++)); do
+    >&2 echo "$((i+1)). ${devices[$i]}"
+done
+
+read -r -p "Enter the number of the device you want to use: " choice
+
+if [[ $choice -ge 1 && $choice -le ${#devices[@]} ]]; then
+    choice="$((choice - 1))"
+
+    # Output
+    echo "${devices[$choice]}"
+else
+    >&2 echo "Invalid choice."
+    return 1
+fi

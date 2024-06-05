@@ -1,0 +1,31 @@
+#!/bin/sh
+
+# This is a script that we run on Android to address a shortcoming in run-as -
+# it doesn't work for non-debuggable packages even when you are root
+# This version works for any package when root is available
+
+pkg="$1"
+shift
+
+# If run-as works, just use that.
+if run-as "$pkg" true 2>/dev/null; then
+    run-as "$pkg" "$@"
+    exit $?
+fi
+
+# If run-as doesn't work we need to use some undocumented internals to parse
+# out the uid and data_dir for a package
+# See: 
+# https://cs.android.com/android/platform/superproject/main/+/main:system/core/libpackagelistparser/packagelistparser.cpp
+package_info="$(grep "^$pkg " /data/system/packages.list)"
+export uid="$(awk '{ print $2 }' <<< "$package_info")"
+export data_dir="$(awk '{ print $4 }' <<< "$package_info")"
+
+# To mimic the behavior of run-as, we run export HOME and run the command from
+# the data_dir
+export HOME="$data_dir"
+cd "$data_dir"
+
+# There are different flavors of su on different devices. This works on userdebug builds.
+# TODO: Compatibility with Magisk and TWRP
+su "$uid" "$@"

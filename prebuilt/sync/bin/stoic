@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# This is the version of stoic that runs on the device
+
+# I switched to app_process64 because I got UnsatisfiedLinkError with dalvikvm
+# when trying to use LocalSocket. But then I discovered I couldn't use
+# LocalSocket anyway - I need to use run-as so that the correct user is
+# connecting to the socket. So maybe dalvikvm could work too.
+
+app_process64 -Djava.class.path=/data/local/tmp/stoic/sync/stoic/stoic-client.dex.jar / com.square.stoic.android.client.AndroidMainKt "$@"
