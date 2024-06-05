@@ -49,7 +49,7 @@ This calls ActivityManager.getHistoricalProcessExitReasons from within
 stdout. You can then get additional information about a particular exit with
 `--epoch`. Example:
 ```
-% stoic com.example appexitinfo --epoch 1716538138670
+% stoic --pkg com.example appexitinfo --epoch 1716538138670
 1716538138670 (2024-05-24 01:08:58) com.example ANR FOREGROUND
 Subject: Input dispatching timed out (77cb36a com.example/com.example.LoggedOutActivity (server) is not responding. Waited 5006ms for MotionEvent(deviceId=3, eventTime=1687386880000, source=TOUCHSCREEN | STYLUS, displayId=0, action=DOWN, actionButton=0x00000000, flags=0x00000000, metaState=0x00000000, buttonState=0x00000000, classification=NONE, edgeFlags=0x00000000, xPrecision=12.8, yPrecision=20.5, xCursorPosition=nan, yCursorPosition=nan, pointers=[0: (2062.9, 812.0)]), policyFlags=0x62000000)
 RssHwmKb: 561152
