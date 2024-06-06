@@ -9,3 +9,14 @@ script_dir="$(dirname "$(readlink -f "$0")")"
 
 # TODO
 #"$script_dir"/test-shebang.sh
+
+# Verify we can build clean
+rm -r "$script_dir/../out"
+"$script_dir/../build.sh"
+
+set +x
+echo
+echo
+echo All checks completed successfully
+echo
+echo

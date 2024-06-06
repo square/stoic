@@ -56,7 +56,7 @@ mkdir -p "$stoic_core_sync_dir"/{plugins,stoic,bin,apk}
 check_required "build-tools;$stoic_build_tools_version" "platforms;android-$stoic_target_api_level" "ndk;$stoic_ndk_version"
 
 # Used by native/Makefile.inc
-export ANDROID_NDK="$ANDROID_HOME/$stoic_ndk_version"
+export ANDROID_NDK="$ANDROID_HOME/ndk/$stoic_ndk_version"
 
 cd "$stoic_kotlin_dir"
 
