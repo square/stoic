@@ -71,6 +71,7 @@ cp androidClient/build/libs/androidClient.dex.jar "$stoic_core_sync_dir/stoic/st
 cp plugin_helloworld/build/libs/plugin_helloworld.dex.jar "$stoic_core_sync_dir/plugins/helloworld.dex.jar"
 cp plugin_appexitinfo/build/libs/plugin_appexitinfo.dex.jar "$stoic_core_sync_dir/plugins/appexitinfo.dex.jar"
 cp plugin_error/build/libs/plugin_error.dex.jar "$stoic_core_sync_dir/plugins/error.dex.jar"
+cp exampleapp/build/outputs/apk/debug/exampleapp-debug.apk "$stoic_core_sync_dir/apk/"
 
 cd "$stoic_dir/native"
 make -j16 all
