@@ -61,9 +61,12 @@ class StoicPlugin(private val stoicDir: String, private val socket: LocalSocket)
         Log.d("stoic", "pluginJar: $pluginJar - exists? ${File(pluginJar).exists()}")
         Log.d("stoic", "dexoutDir: $dexoutDir")
         val parentClassLoader = StoicPlugin::class.java.classLoader
+
+        // It's important to use canonical paths to avoid triggering
+        // https://github.com/square/stoic/issues/2
         val classLoader = DexClassLoader(
-          pluginJar,
-          dexoutDir.absolutePath,
+          File(pluginJar).canonicalPath,
+          dexoutDir.canonicalPath,
           null,
           parentClassLoader)
         val stdinOutPipe = PipedOutputStream()
