@@ -62,7 +62,7 @@ cd "$stoic_kotlin_dir"
 
 # exampleapp is the debug app that's used by default. It needs to be debug so
 # that stoic can attach to it.
-./gradlew --parallel :hostMain:assemble :stoicAndroid:assemble :androidServer:dexJar :androidClient:dexJar :plugin_helloworld:dexJar :plugin_appexitinfo:dexJar :plugin_error:dexJar :exampleapp:assembleDebug
+./gradlew --parallel :hostMain:assemble :stoicAndroid:assemble :androidServer:dexJar :androidClient:dexJar :plugin_helloworld:dexJar :plugin_appexitinfo:dexJar :plugin_crasher:dexJar :exampleapp:assembleDebug
 cp hostMain/build/libs/hostMain.jar "$stoic_release_dir"/jar/
 cp stoicAndroid/build/libs/stoicAndroid.jar "$stoic_release_dir"/jar/
 cp stoicAndroid/build/libs/stoicAndroid-sources.jar "$stoic_release_dir"/jar/
@@ -70,7 +70,7 @@ cp androidServer/build/libs/androidServer.dex.jar "$stoic_core_sync_dir/stoic/st
 cp androidClient/build/libs/androidClient.dex.jar "$stoic_core_sync_dir/stoic/stoic-client.dex.jar"
 cp plugin_helloworld/build/libs/plugin_helloworld.dex.jar "$stoic_core_sync_dir/plugins/helloworld.dex.jar"
 cp plugin_appexitinfo/build/libs/plugin_appexitinfo.dex.jar "$stoic_core_sync_dir/plugins/appexitinfo.dex.jar"
-cp plugin_error/build/libs/plugin_error.dex.jar "$stoic_core_sync_dir/plugins/error.dex.jar"
+cp plugin_crasher/build/libs/plugin_crasher.dex.jar "$stoic_core_sync_dir/plugins/crasher.dex.jar"
 cp exampleapp/build/outputs/apk/debug/exampleapp-debug.apk "$stoic_core_sync_dir/apk/"
 
 cd "$stoic_dir/native"

@@ -9,9 +9,40 @@ import java.util.concurrent.CountDownLatch
  */
 @Suppress("unused")
 fun main(args: Array<String>) {
+  if (args.size != 1) {
+    usage(1)
+  }
 
   // TODO: support other error types
-  injectAnr()
+  when (args[0]) {
+    "anr" -> injectAnr()
+    "art-oom" -> injectArtOom()
+    else -> usage(1)
+  }
+}
+
+fun usage(exitCode: Int) {
+  eprintln("stoic crasher [anr|art-oom]")
+  exit(exitCode)
+}
+
+/**
+ * This injects an ART OutOfMemory error. The naming art-oom is specific to avoid confusion with
+ * lmkd-style OOMs, which are an entirely different class of problem.
+ */
+// TODO: provide options for single large allocation vs multiple small allocations
+// TODO: provide options for main-thread
+fun injectArtOom() {
+  thread {
+    val listOfArrays = mutableListOf<ByteArray>()
+    while (true) {
+      listOfArrays.add(ByteArray(Int.MAX_VALUE))
+      val total = Int.MAX_VALUE.toLong() * listOfArrays.size / (1024 * 1024 * 1024)
+      // We print a hash to prevent any possible compiler optimizations from being applied (not that
+      // I've seen any).
+      eprintln("Total allocated: $total GB. Hash=${listOfArrays.hashCode()}")
+    }
+  }
 }
 
 fun injectAnr() {
