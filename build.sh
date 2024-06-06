@@ -77,21 +77,42 @@ make -j16 all
 
 chmod -R a+rw "$stoic_core_sync_dir"
 
-set +e
-stoic_path="$(readlink -f "$(which stoic)")"
-set -e
-
-if [ -z "$stoic_path" ]; then 
-    >&2 echo "WARNING: stoic is missing from your PATH. Add \`$stoic_dir/out/rel/bin\` to your PATH"
-elif [ "$stoic_path" != "$stoic_dir/out/rel/bin/stoic" ]; then
-    >&2 echo "WARNING: Your PATH is currently including stoic from: $stoic_path"
-    >&2 echo "The version you just built is in \`$stoic_dir/out/rel/bin\`"
-fi
-
-
 echo
 echo
 echo "----- Stoic build completed -----"
 echo
 echo
-echo "Next run \`$stoic_dir/out/rel/bin/stoic setup\`"
+
+set +e
+stoic_path="$(readlink -f "$(which stoic)")"
+set -e
+
+if [ -z "$stoic_path" ]; then
+    case "$SHELL" in
+      */bash)
+        config_file='~''/.bashrc'
+        ;;
+      */zsh)
+        config_file='~''/.zshrc'
+        ;;
+      *)
+        config_file="<path-to-your-config-file>"
+        ;;
+    esac
+
+    >&2 echo "WARNING: stoic is missing from your PATH. Next, please run:"
+    >&2 echo
+    >&2 echo "    echo export PATH=\$PATH:$stoic_dir/out/rel/bin >> $config_file && source $config_file"
+    >&2 echo "    stoic setup"
+    >&2 echo
+elif [ "$stoic_path" != "$stoic_dir/out/rel/bin/stoic" ]; then
+    >&2 echo "WARNING: Your PATH is currently including stoic from: $stoic_path"
+    >&2 echo "The version you just built is in \`$stoic_dir/out/rel/bin\`"
+    >&2 echo "Next, please run: \`$stoic_dir/out/rel/bin/stoic setup\`"
+    >&2 echo
+else
+    >&2 echo "Next, please run:"
+    >&2 echo
+    >&2 echo "    stoic setup"
+    >&2 echo
+fi

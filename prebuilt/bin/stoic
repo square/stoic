@@ -4,4 +4,11 @@ set -euo pipefail
 
 script_dir="$(dirname "$(readlink -f "$0")")"
 stoic_release_dir="$(realpath "$script_dir/..")"
+
+# TODO: Not all stoic operations require a device - it'd be better to check for
+# a device on-demand
+# shellcheck disable=SC1091
+source "$stoic_release_dir"/script/android_serial.sh
+_android_serial
+
 java -jar "$stoic_release_dir"/jar/hostMain.jar "$stoic_release_dir" "$@"
