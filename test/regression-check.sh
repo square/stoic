@@ -6,6 +6,7 @@ set -euxo pipefail
 script_dir="$(dirname "$(readlink -f "$0")")"
 "$script_dir"/shellcheck.sh
 "$script_dir"/test-shell.sh
+"$script_dir"/test-example-apk.sh
 
 # TODO
 #"$script_dir"/test-shebang.sh
