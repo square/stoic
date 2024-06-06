@@ -16,9 +16,10 @@
 #include <nativehelper/scoped_utf_chars.h>
 
 #include <jni.h>
-#include <jvmti.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "jvmti.h"
 
 #define CHECK_JVMTI(x) CHECK_EQ((x), JVMTI_ERROR_NONE)
 

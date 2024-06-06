@@ -62,7 +62,7 @@ cd "$stoic_kotlin_dir"
 
 # exampleapp is the debug app that's used by default. It needs to be debug so
 # that stoic can attach to it.
-./gradlew :hostMain:assemble :stoicAndroid:assemble :androidServer:dexJar :androidClient:dexJar :plugin_helloworld:dexJar :plugin_appexitinfo:dexJar :plugin_error:dexJar :exampleapp:assembleDebug
+./gradlew --parallel :hostMain:assemble :stoicAndroid:assemble :androidServer:dexJar :androidClient:dexJar :plugin_helloworld:dexJar :plugin_appexitinfo:dexJar :plugin_error:dexJar :exampleapp:assembleDebug
 cp hostMain/build/libs/hostMain.jar "$stoic_release_dir"/jar/
 cp stoicAndroid/build/libs/stoicAndroid.jar "$stoic_release_dir"/jar/
 cp stoicAndroid/build/libs/stoicAndroid-sources.jar "$stoic_release_dir"/jar/
