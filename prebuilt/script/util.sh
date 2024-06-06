@@ -15,9 +15,15 @@ if [ -z "${ANDROID_HOME:-}" ]; then
     exit 1
 fi
 
+# Check for required packages
 function check_required {
-    # Check for required packages
+    # Find sdkmanager script (falling back to the old location if the new one
+    # is missing)
     sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+    if [ ! -e "$sdkmanager" ]; then
+        sdkmanager="$ANDROID_HOME/tools/bin/sdkmanager"
+    fi
+
     sdk_packages="$("$sdkmanager" --list_installed 2>/dev/null | awk '{print $1}')"
     missing=()
     for required in "$@"; do
