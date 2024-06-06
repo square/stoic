@@ -61,7 +61,7 @@ class HostPluginClient(args: PluginParsedArgs) : PluginClient(args) {
       syncDevice()
 
       // TODO: other args
-      var stoicArgsString = "--log ${minLogLevel.level}"
+      var stoicArgsString = "--log ${minLogLevel.level} --pkg ${args.pkg}"
       if (args.restartApp) {
         stoicArgsString += " --restart"
       }

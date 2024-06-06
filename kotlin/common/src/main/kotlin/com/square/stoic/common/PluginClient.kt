@@ -81,13 +81,21 @@ abstract class PluginClient(
     var serverConnectResponse: ServerConnectResponse
     try {
       thread {
+        // TODO: this code is Android-only - need to make it run on the host too.
         try {
           if (!connectedLatch.await(1000, MILLISECONDS)) {
             // Maybe the process is in the background which can lead to hangs
             // TODO: why? (doze mode / app standby / background execution limits / idle / battery / etc)?
-            val pkgPid = runCommand(listOf("pidof", pkg))
-            val oomScoreAdj =
-              File("/proc/$pkgPid/oom_score_adj").bufferedReader(UTF_8).readText().trim().toInt()
+            // Seems to be related to "freezer". Here's a stack trace of our agent thread:
+            // $ su 0 cat stack
+            // [<0>] do_freezer_trap+0x50/0x8c
+            // [<0>] get_signal+0x4c4/0x8a8
+            // [<0>] do_notify_resume+0x134/0x340
+            // [<0>] el0_svc+0x68/0xc4
+            // [<0>] el0t_64_sync_handler+0x8c/0xfc
+            // [<0>] el0t_64_sync+0x1a0/0x1a4
+            val pkgPid = adbShellPb("pidof $pkg").stdout()
+            val oomScoreAdj = adbShellPb("cat /proc/$pkgPid/oom_score_adj").stdout().trim().toInt()
             if (oomScoreAdj != 0) {
               logWarn {
                 """

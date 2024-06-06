@@ -37,7 +37,7 @@ class MainParsedArgs(
                 else -> throw IllegalArgumentException("Unrecognized log level: $level")
               }
             }
-            "--package" -> {
+            "--package", "--pkg" -> {
               // option with arg
               stoicArgs.add(arg)
               stoicArgs.add(args[++i])

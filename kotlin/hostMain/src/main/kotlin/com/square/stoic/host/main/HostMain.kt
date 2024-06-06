@@ -361,6 +361,12 @@ fun arsync(vararg args: String) {
 
 fun syncDevice() {
   arsync("--archive", "--delete", "$stoicHostCoreSyncDir/", "$stoicHostUsrSyncDir/", "adb:$stoicDeviceSyncDir/")
+
+  // We remove write permissions to stop people from accidentally writing to files that will be
+  // subsequently overwritten by the next sync
+  // For better latency we do this in the background
+  ProcessBuilder(listOf("adb", "shell", "chmod -R a-w $stoicDeviceSyncDir/"))
+    .start()
 }
 
 // stoic_dir="$(realpath "$(dirname "${BASH_SOURCE[0]}")"/..)"
