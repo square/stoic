@@ -2,6 +2,7 @@ import android.app.ActivityManager
 import android.app.Application
 import android.app.ApplicationExitInfo
 import android.content.Context
+import android.os.StrictMode
 import com.square.stoic.threadlocals.stoic
 import com.square.stoic.helpers.*
 import com.square.stoic.reflect.m
@@ -11,6 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 fun main(args: Array<String>) {
+  StrictMode.setVmPolicy(StrictMode.VmPolicy.Builder(StrictMode.getVmPolicy()).permitNonSdkApiUsage().build())
   var errId: String? = null
   if (args.isNotEmpty()) {
     assert(args[0] == "--id")
@@ -46,6 +48,7 @@ fun main(args: Array<String>) {
 fun printTabular(exits: List<ApplicationExitInfo>) {
   val headers = listOf("id", "timestamp", "process-name", "reason", "sub-reason", "importance")
   val rows = mutableListOf<List<String>>()
+  var failedSubreason = false
   for (exit in exits) {
     val reasonString = getConstantNameByValue(
       ApplicationExitInfo::class.java,
@@ -66,6 +69,7 @@ fun printTabular(exits: List<ApplicationExitInfo>) {
         exit.m["getSubReason"]() as Int
       )
     } catch (e: ReflectiveOperationException) {
+      failedSubreason = true
       "<unavailable>"
     }
 
@@ -94,6 +98,26 @@ fun printTabular(exits: List<ApplicationExitInfo>) {
 
   for (row in rows) {
     println(formatString.format(*row.toTypedArray()))
+  }
+
+  if (failedSubreason) {
+    eprint("""
+
+      Failed to retrieve sub-reason. This may not be available on the current Android version.
+      Or, you may need to run the following command in order to allow reflective access (you'll also
+      need to restart the app afterward).
+
+          stoic shell settings put global hidden_api_policy 1
+
+      If you use this device for testing, you may want to reset the hidden_api_policy back afterward
+      so you'll see the same behavior as users in production.
+
+          stoic shell settings delete global hidden_api_policy
+
+      See https://developer.android.com/guide/app-compatibility/restrictions-non-sdk-interfaces#general-questions
+      for more information.
+
+    """.trimIndent())
   }
 }
 
@@ -164,7 +188,13 @@ fun formatDetailedAppExitInfo(exit: ApplicationExitInfo): String {
   val epoch = exit.timestamp
   val processName = exit.processName
   val timeString = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date(epoch))
-  val packageList = exit.m["getPackageList"]()
+
+  val packageList = try {
+    exit.m["getPackageList"]()
+  } catch (e: ReflectiveOperationException) {
+    arrayOf("<unavailable>")
+  }
+
   val packageListString = if (packageList == null) {
     "null"
   } else {

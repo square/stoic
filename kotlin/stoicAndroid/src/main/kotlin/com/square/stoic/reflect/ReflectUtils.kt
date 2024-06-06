@@ -83,11 +83,11 @@ class MagicMethods(private val obj: Any?, private val clazz: Class<*>) {
       val resolvedMethod = try {
         resolve(clazz, name, jvmSig)
       } catch (e: NoSuchMethodException) {
-        eprintln("clazz: ${clazz.name}")
-        for (m in clazz.declaredMethods.sortedBy { it.name }) {
-          eprintln("method: ${m.name} ${m.modifiers} ${m.parameterTypes.asList()}")
-        }
-        throw Exception("$clazz $name $jvmSig not found")
+        //eprintln("clazz: ${clazz.name}")
+        //for (m in clazz.declaredMethods.sortedBy { it.name }) {
+        //  eprintln("method: ${m.name} ${m.modifiers} ${m.parameterTypes.asList()}")
+        //}
+        throw NoSuchMethodException("$clazz $name $jvmSig not found")
       }
 
       cache[key] = resolvedMethod
