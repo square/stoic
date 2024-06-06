@@ -8,7 +8,7 @@ stoic_target_api_level=34
 stoic_build_tools_version=34.0.0
 stoic_ndk_version=26.3.11579264
 
-if [ -z "$ANDROID_HOME" ]; then
+if [ -z "${ANDROID_HOME:-}" ]; then
     echo "ANDROID_HOME env variable not defined. This should be the path to your Android SDK."
     echo "e.g."
     echo "    export ANDROID_HOME=~/Library/Android/sdk"
