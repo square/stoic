@@ -21,7 +21,9 @@ function check_required {
     # is missing)
     sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
     if [ ! -e "$sdkmanager" ]; then
-        sdkmanager="$ANDROID_HOME/tools/bin/sdkmanager"
+        >&2 echo "Failed to find sdkmanager in its usual location."
+        >&2 echo "Please update Android SDK Command-line Tools to the latest version."
+        exit 1
     fi
 
     sdk_packages="$("$sdkmanager" --list_installed 2>/dev/null | awk '{print $1}')"
@@ -32,15 +34,17 @@ function check_required {
         fi
     done
     if [ ${#missing[@]} -gt 0 ]; then
-        echo "stoic requires Android SDK package ${missing[*]}"
+        echo "stoic requires Android SDK packages: ${missing[*]}"
         echo "Okay to install? (will run '$sdkmanager ${missing[*]}')"
-        read -r -p "Y/n: " choice
+        read -r -p "Y/n? " choice
         case "$(echo "$choice" | tr '[:upper:]' '[:lower:]')" in
           n*)
             exit 1
             ;;
           *)
-            $sdkmanager "${missing[@]}"
+            for x in "${missing[@]}"; do
+                $sdkmanager "$x"
+            done
             ;;
         esac
     fi

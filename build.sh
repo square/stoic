@@ -26,8 +26,37 @@ for arg in "$@"; do
     esac
 done
 
+verify_submodules() {
+    for x in "$@"; do
+        if [ -z "$(2>/dev/null ls "$stoic_dir/$x/")" ]; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+if ! verify_submodules native/libbase/ native/fmtlib/ native/libnativehelper/; then
+    >&2 echo "Submodules are missing. Likely your ran git clone without --recurse-submodules."
+    >&2 echo "Okay to update? (Will run \`git submodule update --init --recursive\`)"
+    read -r -p "Y/n? " choice
+    case "$(echo "$choice" | tr '[:upper:]' '[:lower:]')" in
+      n*)
+        exit 1
+        ;;
+      *)
+        >/dev/null pushd "$stoic_dir"
+        git submodule update --init --recursive
+        >/dev/null popd
+        ;;
+    esac
+fi
+
 mkdir -p "$stoic_core_sync_dir"/{plugins,stoic,bin,apk}
 check_required "build-tools;$stoic_build_tools_version" "platforms;android-$stoic_target_api_level" "ndk;$stoic_ndk_version"
+
+# Used by native/Makefile.inc
+export ANDROID_NDK="$ANDROID_HOME/$stoic_ndk_version"
 
 cd "$stoic_kotlin_dir"
 
