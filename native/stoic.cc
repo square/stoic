@@ -163,6 +163,10 @@ StoicJvmti_getInstances(JNIEnv *jni, jobject stoicJvmti, jclass klass, jboolean 
 
   return klassArray;
 }
+
+JNIEXPORT jobject JNICALL
+Jvmti_Externals_GetMethodId(JNIEnv *jni, jclass clazz, jstring methodName, jstring methodSignature) {
+}
  
 struct AgentInfo {
   std::string options;

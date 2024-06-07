@@ -4,6 +4,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.square.stoic.jvmti.VirtualMachine
+import com.square.stoic.jvmti.nativeGetInstances
 import java.io.InputStream
 import java.io.PrintStream
 import java.util.concurrent.Callable
@@ -19,8 +21,32 @@ import kotlin.concurrent.thread
 // used
 internal val internalStoic = ThreadLocal<Stoic>()
 
+/**
+ * A callback that will be invoked when a hook
+ */
+interface HookCallback {
+  /**
+   * To invoke the original, call runnable.run. If you don't invoke the original, it will be invoked
+   * immediately after you return. TODO: Maybe we should use PopFrame to avoid this requirement?
+   */
+  fun onInvoke(runnable: Runnable)
+}
+
 class StoicJvmti private constructor() {
-  external fun <T> getInstances(clazz: Class<T>, includeSubclasses: Boolean = true): Array<T>
+  fun <T> getInstances(clazz: Class<T>, includeSubclasses: Boolean = true): Array<T> {
+    return nativeGetInstances(clazz, includeSubclasses)
+  }
+
+  fun getVirtualMachine(): VirtualMachine {
+    return VirtualMachine()
+  }
+
+  // TODO: maybe we should make unregisterCallback take the same callback parameter? Maybe
+  // we should track a Set of callbacks?
+  // TODO: we need to carefully account for all APIs we use, and disallow them from being hooked
+  // perhaps we should return a Closeable and use close to unregister?
+  external fun <T> registerCallback(clazz: Class<T>, name: String, sig: String, callback: HookCallback)
+  external fun <T> unregisterCallback(clazz: Class<T>, name: String, sig: String)
 
   // Include other helpers with jvmti deps here
 
