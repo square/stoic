@@ -10,21 +10,31 @@ abort() {
 }
 
 verify_output() {
-    {
-       set +x
-    } 2>/dev/null  # Don't print set +x
-
     expected="$1"
     lineno="$2"
     shift
     shift
+    >&2 echo verify_output "$@"
     output="$("$@")"
     if [ "$output" != "$expected" ]; then
         echo "expected: '$expected'"
         echo "actual  : '$output'"
         abort "$lineno" Failed
     fi
-    set -x
+}
+
+verify_stderr() {
+    expected="$1"
+    lineno="$2"
+    shift
+    shift
+    >&2 echo verify_stderr "$@"
+    output="$("$@" 3>&1 1>/dev/null 2>&3)"
+    if [ "$output" != "$expected" ]; then
+        echo "expected: '$expected'"
+        echo "actual  : '$output'"
+        abort "$lineno" Failed
+    fi
 }
 
 cd "$script_dir"
@@ -39,3 +49,13 @@ verify_output 'Hello world []'                                                  
 
 # Verify we can uninstall the example app (guard against https://github.com/square/stoic/issues/2) 
 adb uninstall com.square.stoic.example
+
+# Verify no stderr logs when reinstalling the example app
+verify_stderr '' $LINENO stoic helloworld
+
+# Verify no stderr logs when starting a previously stopped example app
+adb shell am force-stop com.example.helloworld
+verify_stderr '' $LINENO stoic helloworld
+
+# Verify no stderr logs when restarting the example app
+verify_stderr '' $LINENO stoic --restart helloworld

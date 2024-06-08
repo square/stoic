@@ -1,5 +1,6 @@
 package com.square.stoic.common
 
+import com.square.stoic.common.LogLevel.DEBUG
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.EOFException
@@ -31,7 +32,7 @@ abstract class PluginClient(
       try {
         return fastPath()
       } catch (e: ConnectException) {
-        logWarn { "Plugin fast-path failed. Falling back to plugin slow-path." }
+        logInfo { "Plugin fast-path failed. Falling back to plugin slow-path." }
         logDebug { e.stackTraceToString() }
       }
     }
@@ -43,10 +44,15 @@ abstract class PluginClient(
     val pkg = args.pkg
     val pkgSocat = "./stoic/socat"  // We start in home
     val serverAddress = serverSocketName(pkg)
-    val process = adbShellPb("$runAsCompat $pkg $pkgSocat - ABSTRACT-CONNECT:$serverAddress")
-      .redirectError(Redirect.INHERIT)
-      .start()
-    return attemptPlugin(process)
+    val pb = adbShellPb("$runAsCompat $pkg $pkgSocat - ABSTRACT-CONNECT:$serverAddress")
+
+    // If our log level is DEBUG (or VERBOSE) then we show stderr. Otherwise stderr will by default
+    // go to pipe and not be seen at all.
+    if (minLogLevel <= DEBUG) {
+      pb.redirectError(Redirect.INHERIT)
+    }
+
+    return attemptPlugin(pb.start())
   }
 
   protected fun attemptPlugin(process: Process): Int {

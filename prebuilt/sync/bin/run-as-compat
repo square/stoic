@@ -7,25 +7,41 @@
 pkg="$1"
 shift
 
-# If run-as works, just use that.
+# If run-as works with this package, just use that.
 if run-as "$pkg" true 2>/dev/null; then
     run-as "$pkg" "$@"
     exit $?
 fi
 
+if [ -z "$(which su)" ]; then
+    exit 1
+fi
+
+
 # If run-as doesn't work we need to use some undocumented internals to parse
 # out the uid and data_dir for a package
 # See: 
 # https://cs.android.com/android/platform/superproject/main/+/main:system/core/libpackagelistparser/packagelistparser.cpp
-package_info="$(grep "^$pkg " /data/system/packages.list)"
-export uid="$(awk '{ print $2 }' <<< "$package_info")"
-export data_dir="$(awk '{ print $4 }' <<< "$package_info")"
+package_info="$(su 0 grep "^$pkg " /data/system/packages.list)"
+if [ -z "$package_info" ]; then
+    >&2 echo Package $pkg not found.
+    exit 1
+fi
+
+uid="$(awk '{ print $2 }' <<< "$package_info")"
+data_dir="$(awk '{ print $4 }' <<< "$package_info")"
 
 # To mimic the behavior of run-as, we run export HOME and run the command from
 # the data_dir
 export HOME="$data_dir"
-cd "$data_dir"
 
 # There are different flavors of su on different devices. This works on userdebug builds.
 # TODO: Compatibility with Magisk and TWRP
-su "$uid" "$@"
+
+if [ $# == 0 ]; then
+    # No command - enter interactive shell
+    args=("$0" "sh")
+else
+    args=("$0" "$@")
+fi
+su "$uid" sh -c 'cd "$HOME" && "$@"' "${args[@]}"
