@@ -4,8 +4,10 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.square.stoic.jvmti.BreakpointRequest
+import com.square.stoic.jvmti.EventCallback
+import com.square.stoic.jvmti.EventRequest
 import com.square.stoic.jvmti.VirtualMachine
-import com.square.stoic.jvmti.nativeGetInstances
 import java.io.InputStream
 import java.io.PrintStream
 import java.util.concurrent.Callable
@@ -34,11 +36,21 @@ interface HookCallback {
 
 class StoicJvmti private constructor() {
   fun <T> getInstances(clazz: Class<T>, includeSubclasses: Boolean = true): Array<T> {
-    return nativeGetInstances(clazz, includeSubclasses)
+    return VirtualMachine.nativeGetInstances(clazz, includeSubclasses)
   }
 
-  fun getVirtualMachine(): VirtualMachine {
-    return VirtualMachine()
+  fun breakpoint(clazz: Class<*>, methodName: String, methodSig: String, runnable: Runnable): BreakpointRequest {
+    val method = VirtualMachine.concreteMethodByName(clazz, methodName, methodSig)
+    val location = method.location()
+    return VirtualMachine.eventRequestManager.createBreakpointRequest(location, object: EventCallback {
+      override fun onEvent(events: Iterable<EventRequest>) {
+        runnable.run()
+      }
+    })
+  }
+
+  val virtualMachine: VirtualMachine get() {
+    return VirtualMachine
   }
 
   // TODO: maybe we should make unregisterCallback take the same callback parameter? Maybe

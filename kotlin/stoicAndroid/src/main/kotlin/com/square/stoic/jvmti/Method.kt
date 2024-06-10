@@ -6,9 +6,12 @@ package com.square.stoic.jvmti
  * See https://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html#method for JVMTI method
  * functions
  */
-class Method(val referenceType: ReferenceType, methodId: MethodId) {
-  //
+class Method(val clazz: Class<*>, val jmethodId: JMethodId) {
+  /**
+   * The start of the method
+   */
   fun location(): Location {
-    TODO()
+    val jlocation = VirtualMachine.nativeGetMethodStartLocation(jmethodId)
+    return Location(this, jlocation)
   }
 }

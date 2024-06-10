@@ -30,6 +30,8 @@
 //
 typedef struct {
  jvmtiEnv *jvmti;
+ jclass stoicJvmtiVmClass;
+ jmethodID nativeCallbackOnBreakpoint;
 } GlobalAgentData;
  
 static GlobalAgentData *gdata;
@@ -59,7 +61,7 @@ jvmtiHeapIterationCallback_untagUnconditionally(jlong class_tag, jlong size, jlo
 }
 
 JNIEXPORT jobject JNICALL
-StoicJvmti_getInstances(JNIEnv *jni, jobject stoicJvmti, jclass klass, jboolean includeSubclasses) {
+Jvmti_VirtualMachine_nativeGetInstances(JNIEnv *jni, jobject vmClass, jclass klass, jboolean includeSubclasses) {
   jvmtiEnv* jvmti = gdata->jvmti;
 
   // Clear all tags in the heap
@@ -164,8 +166,38 @@ StoicJvmti_getInstances(JNIEnv *jni, jobject stoicJvmti, jclass klass, jboolean 
   return klassArray;
 }
 
-JNIEXPORT jobject JNICALL
-Jvmti_Externals_GetMethodId(JNIEnv *jni, jclass clazz, jstring methodName, jstring methodSignature) {
+JNIEXPORT jlong JNICALL
+Jvmti_VirtualMachine_nativeGetMethodId(JNIEnv *jni, jobject vmClass, jclass clazz, jstring methodName, jstring methodSignature) {
+  const char* methodNameChars = jni->GetStringUTFChars(methodName, NULL);
+  const char* methodSignatureChars = jni->GetStringUTFChars(methodSignature, NULL);
+  jmethodID methodId = jni->GetMethodID(clazz, methodNameChars, methodSignatureChars);
+  jni->ReleaseStringUTFChars(methodName, methodNameChars);
+  jni->ReleaseStringUTFChars(methodSignature, methodSignatureChars);
+
+  return (jlong) methodId;
+}
+
+JNIEXPORT jlong JNICALL
+Jvmti_VirtualMachine_nativeGetMethodStartLocation(JNIEnv *jni, jobject vmClass, jlong methodId) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jlocation startLocation = -1;
+  jlocation endLocation = -1;
+  CHECK_JVMTI(jvmti->GetMethodLocation((jmethodID) methodId, &startLocation, &endLocation));
+  CHECK(startLocation != -1);
+  return startLocation;
+}
+
+JNIEXPORT void JNICALL
+Jvmti_VirtualMachine_nativeSetBreakpoint(JNIEnv *jni, jobject vmClass, jlong methodId, jlong location) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jmethodID castMethodId = reinterpret_cast<jmethodID>(methodId);
+  CHECK_JVMTI(jvmti->SetBreakpoint(castMethodId, location));
+}
+
+JNIEXPORT void JNICALL
+Jvmti_VirtualMachine_nativeClearBreakpoint(JNIEnv *jni, jobject vmClass, jlong methodId, jlong location) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  CHECK_JVMTI(jvmti->ClearBreakpoint((jmethodID) methodId, (jlocation) location));
 }
  
 struct AgentInfo {
@@ -197,10 +229,17 @@ static AgentInfo* GetAgentInfo(jvmtiEnv* jvmti) {
   return ai;
 }
 
+static void JNICALL
+CbBreakpoint(jvmtiEnv* jvmti, JNIEnv* jni, jthread thread, jmethodID methodId, jlocation location) {
+  __android_log_print(ANDROID_LOG_INFO, "stoic", "CbBreakpoint\n");
+  jni->CallStaticVoidMethod(gdata->stoicJvmtiVmClass, gdata->nativeCallbackOnBreakpoint, methodId, location);
+}
+
 static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) {
   LOG(DEBUG) << "Running AgentMain";
   // store jvmti in a global data
-  gdata = (GlobalAgentData*) malloc(sizeof(GlobalAgentData));
+  gdata = (GlobalAgentData*) calloc(1, sizeof(GlobalAgentData));
+
   gdata->jvmti = jvmti;
   LOG(DEBUG) << "jvmti stored";
 
@@ -310,18 +349,25 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
   CHECK(method_ClassLoader_loadClass != nullptr);
   LOG(DEBUG) << "Found loadClass method";
 
-  ScopedLocalRef<jstring> stoicJvmtiClassName(jni, jni->NewStringUTF("com.square.stoic.StoicJvmti"));
-  CHECK(stoicJvmtiClassName.get() != nullptr);
+  ScopedLocalRef<jstring> stoicJvmtiVmClassName(jni, jni->NewStringUTF("com.square.stoic.jvmti.VirtualMachine"));
+  CHECK(stoicJvmtiVmClassName.get() != nullptr);
 
-  ScopedLocalRef<jclass> klass_stoicJvmti(jni, (jclass) jni->CallObjectMethod(dexClassLoader.get(), method_ClassLoader_loadClass, stoicJvmtiClassName.get()));
-  CHECK(klass_stoicJvmti.get() != nullptr);
-  LOG(DEBUG) << "Found Stoic class";
+  ScopedLocalRef<jclass> klass_stoicJvmtiVm(jni, (jclass) jni->CallObjectMethod(dexClassLoader.get(), method_ClassLoader_loadClass, stoicJvmtiVmClassName.get()));
+  CHECK(klass_stoicJvmtiVm.get() != nullptr);
+  LOG(DEBUG) << "Found stoic.jvmti.VirtualMachine class";
+
+  gdata->stoicJvmtiVmClass = (jclass) jni->NewGlobalRef(klass_stoicJvmtiVm.get());
+  gdata->nativeCallbackOnBreakpoint = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnBreakpoint", "(JJ)V");
 
   JNINativeMethod methods[] = {
-    {"getInstances", "(Ljava/lang/Class;Z)[Ljava/lang/Object;", (void *)&StoicJvmti_getInstances}
+    {"nativeGetInstances", "(Ljava/lang/Class;Z)[Ljava/lang/Object;", (void *)&Jvmti_VirtualMachine_nativeGetInstances},
+    {"nativeGetMethodId", "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)J", (void *)&Jvmti_VirtualMachine_nativeGetMethodId},
+    {"nativeGetMethodStartLocation", "(J)J", (void *)&Jvmti_VirtualMachine_nativeGetMethodStartLocation},
+    {"nativeSetBreakpoint", "(JJ)V", (void *)&Jvmti_VirtualMachine_nativeSetBreakpoint},
+    {"nativeClearBreakpoint", "(JJ)V", (void *)&Jvmti_VirtualMachine_nativeClearBreakpoint},
   };
 
-  CHECK(jni->RegisterNatives(klass_stoicJvmti.get(), methods, sizeof(methods) / sizeof(methods[0])) == JNI_OK);
+  CHECK(jni->RegisterNatives(gdata->stoicJvmtiVmClass, methods, sizeof(methods) / sizeof(methods[0])) == JNI_OK);
 
 
   //
@@ -415,16 +461,18 @@ static jint AgentStart(JavaVM* vm, char* options, [[maybe_unused]] void* reserve
 
   jvmtiCapabilities caps = {
     .can_tag_objects = 1,
+    .can_generate_breakpoint_events = 1,
   };
-  if (jvmti->AddCapabilities(&caps) != JVMTI_ERROR_NONE) {
-    LOG(ERROR) << "Unable to get retransform_classes capability!";
-    return JNI_ERR;
-  }
+  CHECK_JVMTI(jvmti->AddCapabilities(&caps) != JVMTI_ERROR_NONE);
+
   jvmtiEventCallbacks cb{
     .VMInit = CbVmInit,
+    .Breakpoint = CbBreakpoint,
   };
-  jvmti->SetEventCallbacks(&cb, sizeof(cb));
-  jvmti->SetEnvironmentLocalStorage(reinterpret_cast<void*>(ai));
+  CHECK_JVMTI(jvmti->SetEventCallbacks(&cb, sizeof(cb)));
+  CHECK_JVMTI(jvmti->SetEnvironmentLocalStorage(reinterpret_cast<void*>(ai)));
+  CHECK_JVMTI(jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_BREAKPOINT, nullptr /* all threads */));
+
   if (kIsOnLoad) {
     LOG(DEBUG) << "kIsOnLoad";
     jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_VM_INIT, nullptr);
