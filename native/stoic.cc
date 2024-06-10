@@ -231,8 +231,10 @@ static AgentInfo* GetAgentInfo(jvmtiEnv* jvmti) {
 
 static void JNICALL
 CbBreakpoint(jvmtiEnv* jvmti, JNIEnv* jni, jthread thread, jmethodID methodId, jlocation location) {
-  __android_log_print(ANDROID_LOG_INFO, "stoic", "CbBreakpoint\n");
-  jni->CallStaticVoidMethod(gdata->stoicJvmtiVmClass, gdata->nativeCallbackOnBreakpoint, methodId, location);
+  jint count = -1;
+  CHECK_JVMTI(jvmti->GetFrameCount(thread, &count));
+
+  jni->CallStaticVoidMethod(gdata->stoicJvmtiVmClass, gdata->nativeCallbackOnBreakpoint, methodId, location, count);
 }
 
 static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) {
@@ -357,7 +359,7 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
   LOG(DEBUG) << "Found stoic.jvmti.VirtualMachine class";
 
   gdata->stoicJvmtiVmClass = (jclass) jni->NewGlobalRef(klass_stoicJvmtiVm.get());
-  gdata->nativeCallbackOnBreakpoint = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnBreakpoint", "(JJ)V");
+  gdata->nativeCallbackOnBreakpoint = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnBreakpoint", "(JJI)V");
 
   JNINativeMethod methods[] = {
     {"nativeGetInstances", "(Ljava/lang/Class;Z)[Ljava/lang/Object;", (void *)&Jvmti_VirtualMachine_nativeGetInstances},

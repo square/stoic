@@ -4,10 +4,13 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.square.stoic.jvmti.BreakpointContext
 import com.square.stoic.jvmti.BreakpointRequest
 import com.square.stoic.jvmti.EventCallback
 import com.square.stoic.jvmti.EventRequest
+import com.square.stoic.jvmti.Location
 import com.square.stoic.jvmti.VirtualMachine
+import com.square.stoic.threadlocals.stoic
 import java.io.InputStream
 import java.io.PrintStream
 import java.util.concurrent.Callable
@@ -17,34 +20,25 @@ import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.concurrent.thread
 
 // internalStoic should only be used in callWith. stoic (as defined in ThreadLocals) should not be
 // used
 internal val internalStoic = ThreadLocal<Stoic>()
 
-/**
- * A callback that will be invoked when a hook
- */
-interface HookCallback {
-  /**
-   * To invoke the original, call runnable.run. If you don't invoke the original, it will be invoked
-   * immediately after you return. TODO: Maybe we should use PopFrame to avoid this requirement?
-   */
-  fun onInvoke(runnable: Runnable)
-}
+typealias OnBreakpoint = (bpContext: BreakpointContext) -> Unit
 
 class StoicJvmti private constructor() {
   fun <T> getInstances(clazz: Class<T>, includeSubclasses: Boolean = true): Array<T> {
     return VirtualMachine.nativeGetInstances(clazz, includeSubclasses)
   }
 
-  fun breakpoint(clazz: Class<*>, methodName: String, methodSig: String, runnable: Runnable): BreakpointRequest {
-    val method = VirtualMachine.concreteMethodByName(clazz, methodName, methodSig)
-    val location = method.location()
+  fun syncBreakpoint(location: Location, onBreakpoint: OnBreakpoint): BreakpointRequest {
+    val pluginStoic = stoic
     return VirtualMachine.eventRequestManager.createBreakpointRequest(location, object: EventCallback {
-      override fun onEvent(events: Iterable<EventRequest>) {
-        runnable.run()
+      override fun onEvent(bpContext: BreakpointContext, events: Iterable<EventRequest>) {
+        pluginStoic.callWith {
+          onBreakpoint(bpContext)
+        }
       }
     })
   }
@@ -52,15 +46,6 @@ class StoicJvmti private constructor() {
   val virtualMachine: VirtualMachine get() {
     return VirtualMachine
   }
-
-  // TODO: maybe we should make unregisterCallback take the same callback parameter? Maybe
-  // we should track a Set of callbacks?
-  // TODO: we need to carefully account for all APIs we use, and disallow them from being hooked
-  // perhaps we should return a Closeable and use close to unregister?
-  external fun <T> registerCallback(clazz: Class<T>, name: String, sig: String, callback: HookCallback)
-  external fun <T> unregisterCallback(clazz: Class<T>, name: String, sig: String)
-
-  // Include other helpers with jvmti deps here
 
   companion object {
     @Volatile var privateIsInitialized: Boolean = false

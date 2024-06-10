@@ -52,7 +52,7 @@ object VirtualMachine {
 
   // Callback from native
   @JvmStatic
-  fun nativeCallbackOnBreakpoint(jmethodId: JMethodId, jlocation: JLocation) {
-    eventRequestManager.onBreakpoint(jmethodId, jlocation)
+  fun nativeCallbackOnBreakpoint(jmethodId: JMethodId, jlocation: JLocation, frameCount: Int) {
+    eventRequestManager.onBreakpoint(jmethodId, jlocation, BreakpointContext(Thread.currentThread(), frameCount))
   }
 }

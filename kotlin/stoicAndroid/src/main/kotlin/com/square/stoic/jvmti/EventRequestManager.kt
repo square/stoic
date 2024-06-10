@@ -50,7 +50,7 @@ class EventRequestManager {
     }
   }
 
-  fun onBreakpoint(jMethodId: JMethodId, jLocation: JLocation) {
+  fun onBreakpoint(jMethodId: JMethodId, jLocation: JLocation, bpContext: BreakpointContext) {
     var requests: MutableList<BreakpointRequest>
     synchronized(this) {
       val key = Pair(jMethodId, jLocation)
@@ -60,7 +60,7 @@ class EventRequestManager {
     }
 
     for (request in requests) {
-      request.callback.onEvent(requests.asIterable())
+      request.callback.onEvent(bpContext, requests.asIterable())
     }
   }
 }

@@ -12,5 +12,5 @@ interface EventCallback {
    * We provide the set of events occurring simultaneously. The other events' callbacks will still
    * be invoked. If there are no simultaneous events, then this will just be a set of 1 element.
    */
-  fun onEvent(events: Iterable<EventRequest>)
+  fun onEvent(bpContext: BreakpointContext, events: Iterable<EventRequest>)
 }
