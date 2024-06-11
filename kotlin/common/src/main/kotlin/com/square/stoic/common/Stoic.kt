@@ -121,7 +121,7 @@ fun resolvedProcessBuilder(
   val resolvedCommand = if (shell) {
     // The first item is a shell script to be evaluated by bash. The other items are parameters to
     // that shell script. (These parameters are zero-indexed)
-    listOf("sh", "-c", highlander(command))
+    listOf("sh", "-c") + command
   } else {
     // Run the command through bash so that PATH is used to resolve the executable
     listOf("sh", "-c", "\"\$0\" \"\$@\"") + command
@@ -210,14 +210,6 @@ fun Any?.toKotlinRepr(): String = when (this) {
 fun List<*>.toKotlinListRepr(): String {
   val reprElements = this.joinToString(separator = ", ") { it.toKotlinRepr() }
   return "listOf($reprElements)"
-}
-
-fun <T> highlander(list: List<T>): T {
-  if (list.size != 1) {
-    throw IllegalArgumentException("There can be only one: ${list.toKotlinListRepr()}")
-  }
-
-  return list[0]
 }
 
 const val SOCKET_PREFIX = "/stoic"

@@ -50,17 +50,18 @@ class EventRequestManager {
     }
   }
 
-  fun onBreakpoint(jMethodId: JMethodId, jLocation: JLocation, bpContext: BreakpointContext) {
+  fun onBreakpoint(frame: StackFrame) {
     var requests: MutableList<BreakpointRequest>
     synchronized(this) {
-      val key = Pair(jMethodId, jLocation)
+      val location = frame.location
+      val key = Pair(location.method.jmethodId, location.jlocation)
       // This should always be non-null because we should only be getting callbacks for requests we
       // set previously. Due to race conditions it might be empty
       requests = breakpointRequests[key]!!
     }
 
     for (request in requests) {
-      request.callback.onEvent(bpContext, requests.asIterable())
+      request.callback.onEvent(frame, requests.asIterable())
     }
   }
 }

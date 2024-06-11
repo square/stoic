@@ -1,10 +1,8 @@
-import android.content.ContextWrapper
-import com.square.stoic.helpers.*
-import com.square.stoic.jvmti.BreakpointContext
+import com.square.stoic.helpers.eprintln
+import com.square.stoic.helpers.exit
+import com.square.stoic.helpers.println
 import com.square.stoic.jvmti.Method
-import com.square.stoic.jvmti.VirtualMachine
 import com.square.stoic.threadlocals.jvmti
-import com.square.stoic.threadlocals.stoic
 import java.util.concurrent.CountDownLatch
 
 fun main(args: Array<String>) {
@@ -19,6 +17,8 @@ fun main(args: Array<String>) {
 
   for (arg in args) {
     jvmti.syncBreakpoint(sigToMethodId(arg).location()) { context ->
+      // Construct the string ahead of time to avoid tearing (which could otherwise happen if
+      // multiple threads are writing to stdout simultaneously)
       val sb = StringBuilder("$arg\n")
       for (frame in context.getStackTrace()) {
         sb.append("\tat $frame\n")

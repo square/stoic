@@ -199,6 +199,116 @@ Jvmti_VirtualMachine_nativeClearBreakpoint(JNIEnv *jni, jobject vmClass, jlong m
   jvmtiEnv* jvmti = gdata->jvmti;
   CHECK_JVMTI(jvmti->ClearBreakpoint((jmethodID) methodId, (jlocation) location));
 }
+
+JNIEXPORT jobject JNICALL
+Jvmti_VirtualMachine_nativeGetLocalVariables(JNIEnv *jni, jobject vmClass, jlong methodId) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jmethodID castMethodId = reinterpret_cast<jmethodID>(methodId);
+  jint entryCount = -1;
+  jvmtiLocalVariableEntry* table = NULL;
+  CHECK_JVMTI(jvmti->GetLocalVariableTable(castMethodId, &entryCount, &table));
+
+  ScopedLocalRef<jclass> LocalVariable(jni, jni->FindClass("com/square/stoic/jvmti/LocalVariable"));
+  CHECK(LocalVariable.get() != NULL);
+  jmethodID ctor = jni->GetMethodID(LocalVariable.get(), "<init>", "(JILjava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V");
+  CHECK(ctor != NULL);
+  ScopedLocalRef<jobjectArray> jTable(jni, jni->NewObjectArray(entryCount, LocalVariable.get(), NULL));
+  CHECK(jTable.get() != NULL);
+
+  for (int i = 0; i < entryCount; i++) {
+    jlong startLocation = table[i].start_location;
+    jint length = table[i].length;
+    ScopedLocalRef<jstring> name(jni, jni->NewStringUTF(table[i].name));
+    ScopedLocalRef<jstring> signature(jni, jni->NewStringUTF(table[i].signature));
+    ScopedLocalRef<jstring> genericSignature(jni, jni->NewStringUTF(table[i].generic_signature));
+    jint slot = table[i].slot;
+    ScopedLocalRef<jobject> localVar(jni, jni->NewObject(LocalVariable.get(), ctor, startLocation, length, name.get(), signature.get(), genericSignature.get(), slot));
+    CHECK(localVar.get() != NULL);
+    jni->SetObjectArrayElement(jTable.get(), i, localVar.get());
+  }
+
+  // Deallocate
+  for (int i = 0; i < entryCount; i++) {
+    CHECK_JVMTI(jvmti->Deallocate((unsigned char*) table[i].name));
+    CHECK_JVMTI(jvmti->Deallocate((unsigned char*) table[i].signature));
+    CHECK_JVMTI(jvmti->Deallocate((unsigned char*) table[i].generic_signature));
+    table[i].name = table[i].signature = table[i].generic_signature = NULL;
+  }
+  CHECK_JVMTI(jvmti->Deallocate((unsigned char*) table));
+  table = NULL;
+
+  return jTable.release();
+}
+
+JNIEXPORT jint JNICALL
+Jvmti_VirtualMachine_nativeGetArgumentsSize(JNIEnv *jni, jobject vmClass, jlong methodId) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jmethodID castMethodId = reinterpret_cast<jmethodID>(methodId);
+  jint size = -1;
+  CHECK_JVMTI(jvmti->GetArgumentsSize(castMethodId, &size));
+
+  return size;
+}
+
+JNIEXPORT jint JNICALL
+Jvmti_VirtualMachine_nativeGetMaxLocals(JNIEnv *jni, jobject vmClass, jlong methodId) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jmethodID castMethodId = reinterpret_cast<jmethodID>(methodId);
+  jint maxLocals = -1;
+  CHECK_JVMTI(jvmti->GetMaxLocals(castMethodId, &maxLocals));
+
+  return maxLocals;
+}
+
+JNIEXPORT jobject JNICALL
+Jvmti_VirtualMachine_nativeGetLocalObject(JNIEnv *jni, jobject vmClass, jthread thread, jint height, jint slot) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jint frameCount = -1;
+  CHECK_JVMTI(jvmti->GetFrameCount(thread, &frameCount));
+  jobject result = NULL;
+  CHECK_JVMTI(jvmti->GetLocalObject(thread, frameCount - height, slot, &result));
+  return result;
+}
+
+JNIEXPORT jint JNICALL
+Jvmti_VirtualMachine_nativeGetLocalInt(JNIEnv *jni, jobject vmClass, jthread thread, jint height, jint slot) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jint frameCount = -1;
+  CHECK_JVMTI(jvmti->GetFrameCount(thread, &frameCount));
+  jint result = 0;
+  CHECK_JVMTI(jvmti->GetLocalInt(thread, frameCount - height, slot, &result));
+  return result;
+}
+
+JNIEXPORT jlong JNICALL
+Jvmti_VirtualMachine_nativeGetLocalLong(JNIEnv *jni, jobject vmClass, jthread thread, jint height, jint slot) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jint frameCount = -1;
+  CHECK_JVMTI(jvmti->GetFrameCount(thread, &frameCount));
+  jlong result = 0;
+  CHECK_JVMTI(jvmti->GetLocalLong(thread, frameCount - height, slot, &result));
+  return result;
+}
+
+JNIEXPORT jfloat JNICALL
+Jvmti_VirtualMachine_nativeGetLocalFloat(JNIEnv *jni, jobject vmClass, jthread thread, jint height, jint slot) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jint frameCount = -1;
+  CHECK_JVMTI(jvmti->GetFrameCount(thread, &frameCount));
+  jfloat result = 0.0f;
+  CHECK_JVMTI(jvmti->GetLocalFloat(thread, frameCount - height, slot, &result));
+  return result;
+}
+
+JNIEXPORT jdouble JNICALL
+Jvmti_VirtualMachine_nativeGetLocalDouble(JNIEnv *jni, jobject vmClass, jthread thread, jint height, jint slot) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jint frameCount = -1;
+  CHECK_JVMTI(jvmti->GetFrameCount(thread, &frameCount));
+  jdouble result = 0.0;
+  CHECK_JVMTI(jvmti->GetLocalDouble(thread, frameCount - height, slot, &result));
+  return result;
+}
  
 struct AgentInfo {
   std::string options;
@@ -362,11 +472,19 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
   gdata->nativeCallbackOnBreakpoint = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnBreakpoint", "(JJI)V");
 
   JNINativeMethod methods[] = {
-    {"nativeGetInstances", "(Ljava/lang/Class;Z)[Ljava/lang/Object;", (void *)&Jvmti_VirtualMachine_nativeGetInstances},
-    {"nativeGetMethodId", "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)J", (void *)&Jvmti_VirtualMachine_nativeGetMethodId},
-    {"nativeGetMethodStartLocation", "(J)J", (void *)&Jvmti_VirtualMachine_nativeGetMethodStartLocation},
-    {"nativeSetBreakpoint", "(JJ)V", (void *)&Jvmti_VirtualMachine_nativeSetBreakpoint},
-    {"nativeClearBreakpoint", "(JJ)V", (void *)&Jvmti_VirtualMachine_nativeClearBreakpoint},
+    {"nativeGetInstances",              "(Ljava/lang/Class;Z)[Ljava/lang/Object;",                      (void *)&Jvmti_VirtualMachine_nativeGetInstances},
+    {"nativeGetMethodId",               "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)J",     (void *)&Jvmti_VirtualMachine_nativeGetMethodId},
+    {"nativeGetMethodStartLocation",    "(J)J",                                                         (void *)&Jvmti_VirtualMachine_nativeGetMethodStartLocation},
+    {"nativeSetBreakpoint",             "(JJ)V",                                                        (void *)&Jvmti_VirtualMachine_nativeSetBreakpoint},
+    {"nativeClearBreakpoint",           "(JJ)V",                                                        (void *)&Jvmti_VirtualMachine_nativeClearBreakpoint},
+    {"nativeGetLocalVariables",         "(J)[Lcom/square/stoic/jvmti/LocalVariable;",                   (void *)&Jvmti_VirtualMachine_nativeGetLocalVariables},
+    {"nativeGetArgumentsSize",          "(J)I",                                                         (void *)&Jvmti_VirtualMachine_nativeGetArgumentsSize},
+    {"nativeGetMaxLocals",              "(J)I",                                                         (void *)&Jvmti_VirtualMachine_nativeGetMaxLocals},
+    {"nativeGetLocalObject",            "(Ljava/lang/Thread;II)Ljava/lang/Object;",                     (void *)&Jvmti_VirtualMachine_nativeGetLocalObject},
+    {"nativeGetLocalInt",               "(Ljava/lang/Thread;II)I",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalInt},
+    {"nativeGetLocalLong",              "(Ljava/lang/Thread;II)J",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalLong},
+    {"nativeGetLocalFloat",             "(Ljava/lang/Thread;II)F",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalFloat},
+    {"nativeGetLocalDouble",            "(Ljava/lang/Thread;II)D",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalDouble},
   };
 
   CHECK(jni->RegisterNatives(gdata->stoicJvmtiVmClass, methods, sizeof(methods) / sizeof(methods[0])) == JNI_OK);
@@ -462,8 +580,9 @@ static jint AgentStart(JavaVM* vm, char* options, [[maybe_unused]] void* reserve
   ai->options = sopts;
 
   jvmtiCapabilities caps = {
-    .can_tag_objects = 1,
-    .can_generate_breakpoint_events = 1,
+    .can_tag_objects = JNI_TRUE,
+    .can_access_local_variables = JNI_TRUE,
+    .can_generate_breakpoint_events = JNI_TRUE,
   };
   CHECK_JVMTI(jvmti->AddCapabilities(&caps) != JVMTI_ERROR_NONE);
 

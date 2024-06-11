@@ -19,6 +19,16 @@ object VirtualMachine {
     return Method(clazz, methodId)
   }
 
+  fun methodBySig(sig: String): Method {
+    val match = Regex("""([^.]+)\.(\w+)(\([^()]*\)[^()]*)""").matchEntire(sig)
+    check(match != null)
+    val className = match.groupValues[1].replace('/', '.')
+    val methodName = match.groupValues[2]
+    val methodSig = match.groupValues[3]
+    val clazz = Class.forName(className)
+    return concreteMethodByName(clazz, methodName, methodSig)
+  }
+
   fun allClasses(): List<Class<*>> {
     TODO()
   }
@@ -50,9 +60,36 @@ object VirtualMachine {
   @JvmStatic
   external fun nativeClearBreakpoint(jmethodId: JMethodId, jlocation: JLocation)
 
+  @JvmStatic
+  external fun nativeGetLocalVariables(jmethodId: JMethodId): Array<LocalVariable<*>>
+
+  @JvmStatic
+  external fun nativeGetArgumentsSize(jmethodId: JMethodId): Int
+
+  @JvmStatic
+  external fun nativeGetMaxLocals(jmethodId: JMethodId): Int
+
+  @JvmStatic
+  external fun nativeGetLocalObject(thread: Thread, height: Int, slot: Int): Any
+
+  @JvmStatic
+  external fun nativeGetLocalInt(thread: Thread, height: Int, slot: Int): Int
+
+  @JvmStatic
+  external fun nativeGetLocalLong(thread: Thread, height: Int, slot: Int): Long
+
+  @JvmStatic
+  external fun nativeGetLocalFloat(thread: Thread, height: Int, slot: Int): Float
+
+  @JvmStatic
+  external fun nativeGetLocalDouble(thread: Thread, height: Int, slot: Int): Double
+
   // Callback from native
   @JvmStatic
   fun nativeCallbackOnBreakpoint(jmethodId: JMethodId, jlocation: JLocation, frameCount: Int) {
-    eventRequestManager.onBreakpoint(jmethodId, jlocation, BreakpointContext(Thread.currentThread(), frameCount))
+    val method = Method(null, jmethodId)
+    val location = Location(method, jlocation)
+    val frame = StackFrame(Thread.currentThread(), frameCount, location)
+    eventRequestManager.onBreakpoint(frame)
   }
 }

@@ -4,11 +4,11 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import com.square.stoic.jvmti.BreakpointContext
 import com.square.stoic.jvmti.BreakpointRequest
 import com.square.stoic.jvmti.EventCallback
 import com.square.stoic.jvmti.EventRequest
 import com.square.stoic.jvmti.Location
+import com.square.stoic.jvmti.StackFrame
 import com.square.stoic.jvmti.VirtualMachine
 import com.square.stoic.threadlocals.stoic
 import java.io.InputStream
@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicReference
 // used
 internal val internalStoic = ThreadLocal<Stoic>()
 
-typealias OnBreakpoint = (bpContext: BreakpointContext) -> Unit
+typealias OnBreakpoint = (frame: StackFrame) -> Unit
 
 class StoicJvmti private constructor() {
   fun <T> getInstances(clazz: Class<T>, includeSubclasses: Boolean = true): Array<T> {
@@ -35,9 +35,9 @@ class StoicJvmti private constructor() {
   fun syncBreakpoint(location: Location, onBreakpoint: OnBreakpoint): BreakpointRequest {
     val pluginStoic = stoic
     return VirtualMachine.eventRequestManager.createBreakpointRequest(location, object: EventCallback {
-      override fun onEvent(bpContext: BreakpointContext, events: Iterable<EventRequest>) {
+      override fun onEvent(frame: StackFrame, events: Iterable<EventRequest>) {
         pluginStoic.callWith {
-          onBreakpoint(bpContext)
+          onBreakpoint(frame)
         }
       }
     })
@@ -262,3 +262,12 @@ val isAndroid = try {
 } catch (e: Throwable) {
   false
 }
+
+fun <T> highlander(list: List<T>): T {
+  if (list.size != 1) {
+    throw IllegalArgumentException("There can be only one: $list")
+  }
+
+  return list[0]
+}
+
