@@ -16,6 +16,7 @@ import com.square.stoic.common.optionsJsonFromStoicDir
 import com.square.stoic.common.runAsCompat
 import com.square.stoic.common.runCommand
 import com.square.stoic.common.serverSocketName
+import com.square.stoic.common.stdout
 import com.square.stoic.common.stoicDeviceDevJarDir
 import com.square.stoic.common.stoicDeviceSyncDir
 import com.square.stoic.common.stoicDeviceSyncPluginDir
@@ -66,6 +67,7 @@ class AndroidPluginClient(args: PluginParsedArgs) : PluginClient(args) {
       // We only get here once PluginClient has already tried the fast path. So we start the server
       // and try again
       startAndroidServer()
+      val pid = adbShellPb("pidof $pkg").stdout(expectedExitCode = null)
       val socatVerbosity = if (minLogLevel <= DEBUG) { listOf("-dd") } else { listOf() }
       var process: Process? = null
       try {
@@ -80,7 +82,7 @@ class AndroidPluginClient(args: PluginParsedArgs) : PluginClient(args) {
         logDebug { "input redirect: ${builder.redirectInput()}" }
         logDebug { "output redirect: ${builder.redirectOutput()}" }
         process = builder.start()
-        return attemptPlugin(process)
+        return attemptPlugin(pkg, pid, process)
       } catch (e: Throwable) {
         logError { e.stackTraceToString() }
         throw e

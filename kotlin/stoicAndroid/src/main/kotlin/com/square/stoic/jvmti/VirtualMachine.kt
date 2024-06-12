@@ -1,5 +1,6 @@
 package com.square.stoic.jvmti
 
+import com.square.stoic.highlander
 
 // a jmethodID
 typealias JMethodId = Long
@@ -15,18 +16,45 @@ object VirtualMachine {
   val eventRequestManager: EventRequestManager = EventRequestManager()
 
   fun concreteMethodByName(clazz: Class<*>, name: String, signature: String): Method {
-    val methodId = nativeGetMethodId(clazz, name, signature)
-    return Method(clazz, methodId)
+    val methods = classMethods(clazz)
+    val filteredMethods = methods.filter { it.name == name && it.signature == signature }
+    if (filteredMethods.isEmpty()) {
+      val filteredByName = methods.filter { it.name == name }
+      if (filteredByName.isNotEmpty()) {
+        val signatures = filteredByName.map { "${it.signature}\n" }
+        throw NoSuchMethodException(
+          """
+            Method ${clazz.name}.$name$signature does not exist. ${clazz.name}.$name with the
+            following signatures exist:
+          """.trimIndent() + "\n$signatures")
+      } else {
+        val methodNames = methods.map { "${it.name}\n" }.toSet()
+        throw NoSuchMethodException("""
+            Method $clazz.$name does not exist. $clazz has methods with the following names:
+          """.trimIndent() + "\n$methodNames")
+      }
+    }
+
+    return highlander(filteredMethods)
+  }
+
+  fun classMethods(clazz: Class<*>): List<Method> {
+    return nativeGetClassMethods(clazz).toList()
   }
 
   fun methodBySig(sig: String): Method {
     val match = Regex("""([^.]+)\.(\w+)(\([^()]*\)[^()]*)""").matchEntire(sig)
-    check(match != null)
-    val className = match.groupValues[1].replace('/', '.')
+    check(match != null) { "Invalid sig: '$sig'" }
+    val classSig = match.groupValues[1]
     val methodName = match.groupValues[2]
     val methodSig = match.groupValues[3]
-    val clazz = Class.forName(className)
+    val clazz = classBySig(classSig)
     return concreteMethodByName(clazz, methodName, methodSig)
+  }
+
+  fun classBySig(sig: String): Class<*> {
+    val className = sig.replace('/', '.')
+    return Class.forName(className)
   }
 
   fun allClasses(): List<Class<*>> {
@@ -84,10 +112,22 @@ object VirtualMachine {
   @JvmStatic
   external fun nativeGetLocalDouble(thread: Thread, height: Int, slot: Int): Double
 
+  @JvmStatic
+  external fun nativeGetClassMethods(clazz: Class<*>): Array<Method>
+
+  // Returns either java.lang.reflect.Method or java.lang.reflect.Constructor
+  @JvmStatic
+  external fun nativeToReflectedMethod(clazz: Class<*>, methodId: JMethodId, isStatic: Boolean): Any
+
+  // TODO: the actual API also returns genericSignature - this should probably return a pair of
+  // Strings
+  @JvmStatic
+  external fun nativeGetClassSignature(clazz: Class<*>): String
+
   // Callback from native
   @JvmStatic
   fun nativeCallbackOnBreakpoint(jmethodId: JMethodId, jlocation: JLocation, frameCount: Int) {
-    val method = Method(null, jmethodId)
+    val method = Method(null, jmethodId, null, null, null)
     val location = Location(method, jlocation)
     val frame = StackFrame(Thread.currentThread(), frameCount, location)
     eventRequestManager.onBreakpoint(frame)

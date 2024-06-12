@@ -76,7 +76,7 @@ class Stoic(
     get() = StoicJvmti.get()
 
   // This should be the only place in this file that uses internalStoic
-  fun <T> callWith(forwardUncaught: Boolean = false, callable: Callable<T>): T {
+  fun <T> callWith(forwardUncaught: Boolean = false, printErrors: Boolean = true, callable: Callable<T>): T {
     val oldStoic = internalStoic.get()
     internalStoic.set(this)
     try {
@@ -87,10 +87,14 @@ class Stoic(
         stderr.println(
           "TODO: forward uncaught exception and bring down the plugin without killing the process"
         )
-        stderr.println(t.stackTraceToString())
+        if (printErrors) {
+          stderr.println(t.stackTraceToString())
+        }
         throw t
       } else {
-        stderr.println(t.stackTraceToString())
+        if (printErrors) {
+          stderr.println(t.stackTraceToString())
+        }
         throw t
       }
     } finally {
@@ -269,5 +273,12 @@ fun <T> highlander(list: List<T>): T {
   }
 
   return list[0]
+}
+
+class Stack(stackTrace: Array<StackTraceElement>): Throwable() {
+  constructor(stackTrace: List<StackTraceElement>): this(stackTrace.toTypedArray())
+  init {
+    this.stackTrace = stackTrace
+  }
 }
 

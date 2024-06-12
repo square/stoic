@@ -9,7 +9,7 @@ package com.square.stoic.jvmti
 class LocalVariable<T>(
   val startLocation: JLocation,
   val length: Int,
-  val name: String,
+  val name: String?,
   val signature: String,
   val genericSignature: String?,
   val slot: Int,

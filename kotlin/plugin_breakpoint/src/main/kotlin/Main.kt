@@ -20,7 +20,7 @@ fun main(args: Array<String>) {
       // Construct the string ahead of time to avoid tearing (which could otherwise happen if
       // multiple threads are writing to stdout simultaneously)
       val sb = StringBuilder("$arg\n")
-      for (frame in context.getStackTrace()) {
+      for (frame in context.stackTrace) {
         sb.append("\tat $frame\n")
       }
 

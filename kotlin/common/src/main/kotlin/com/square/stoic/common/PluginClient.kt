@@ -44,6 +44,7 @@ abstract class PluginClient(
     val pkg = args.pkg
     val pkgSocat = "./stoic/socat"  // We start in home
     val serverAddress = serverSocketName(pkg)
+    val pid = adbShellPb("pidof $pkg").stdout(expectedExitCode = null)
     val pb = adbShellPb("$runAsCompat $pkg $pkgSocat - ABSTRACT-CONNECT:$serverAddress")
 
     // If our log level is DEBUG (or VERBOSE) then we show stderr. Otherwise stderr will by default
@@ -52,10 +53,10 @@ abstract class PluginClient(
       pb.redirectError(Redirect.INHERIT)
     }
 
-    return attemptPlugin(pb.start())
+    return attemptPlugin(pkg, pid, pb.start())
   }
 
-  protected fun attemptPlugin(process: Process): Int {
+  protected fun attemptPlugin(pkg: String, pid: String, process: Process): Int {
     try {
       val inputStream = process.inputStream
       val outputStream = process.outputStream
@@ -68,15 +69,30 @@ abstract class PluginClient(
       // Those are fine - the remedy is to start the server
       // Anything else we should logError for.
 
-      return runPlugin(inputStream, outputStream)
-    } catch (e: EOFException) {
-      throw ConnectException("socat failed")
+      return runPlugin(pid, inputStream, outputStream)
+    } catch (e: Throwable) {
+      checkPid(pkg, pid)
+
+      if (e is EOFException) {
+        logDebug { "socat failed ${e.stackTraceToString()}" }
+        throw ConnectException("socat failed")
+      } else {
+        logError { "socat failed ${e.stackTraceToString()}" }
+        throw e
+      }
     } finally {
       process.destroyForcibly()
     }
   }
 
-  private fun runPlugin(inputStream: InputStream, outputStream: OutputStream): Int {
+  private fun checkPid(pkg: String, oldPid: String) {
+    val newPid = adbShellPb("pidof $pkg").stdout(expectedExitCode = null)
+    if (newPid != oldPid) {
+      logWarn { "pidof $pkg changed (old=$oldPid, new=$newPid) - check logcat to see why the process died" }
+    }
+  }
+
+  private fun runPlugin(pkgPid: String, inputStream: InputStream, outputStream: OutputStream): Int {
     val pkg = args.pkg
 
     val writer = MessageWriter(DataOutputStream(outputStream))
@@ -100,7 +116,6 @@ abstract class PluginClient(
             // [<0>] el0_svc+0x68/0xc4
             // [<0>] el0t_64_sync_handler+0x8c/0xfc
             // [<0>] el0t_64_sync+0x1a0/0x1a4
-            val pkgPid = adbShellPb("pidof $pkg").stdout()
             val oomScoreAdj = adbShellPb("cat /proc/$pkgPid/oom_score_adj").stdout().trim().toInt()
             if (oomScoreAdj != 0) {
               logWarn {
@@ -222,6 +237,10 @@ abstract class PluginClient(
     // Trigger these to stop, if they haven't already
     inPumpThread.interrupt()
     outPumpThread.interrupt()
+
+    if (actualExitCode != 0) {
+      checkPid(pkg, pkgPid)
+    }
 
     return actualExitCode
   }

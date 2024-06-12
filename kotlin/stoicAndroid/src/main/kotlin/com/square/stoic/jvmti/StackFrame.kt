@@ -4,7 +4,7 @@ package com.square.stoic.jvmti
  * Analog of https://docs.oracle.com/javase/8/docs/jdk/api/jpda/jdi/com/sun/jdi/StackFrame.html
  */
 class StackFrame(val thread: Thread, val height: Int, val location: Location) {
-  fun getStackTrace(): List<StackTraceElement> {
+  val stackTrace get(): List<StackTraceElement> {
     return thread.stackTrace.takeLast(height)
   }
 

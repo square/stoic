@@ -51,7 +51,7 @@ fun main(stoicDir: String) {
     val namespace = server.localSocketAddress.namespace
     Log.d("stoic", "localSocketAddress: ($name, $namespace)")
 
-    thread {
+    thread(name = "stoic-server") {
       Log.d("stoic", "Letting the client that we're up by connecting to the wait socket")
       try {
         LocalSocket().also {

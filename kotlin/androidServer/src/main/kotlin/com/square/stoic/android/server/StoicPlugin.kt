@@ -26,9 +26,9 @@ import java.io.IOException
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.io.PrintStream
-import java.lang.Exception
 import java.lang.reflect.InvocationTargetException
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.Exception
 import kotlin.concurrent.thread
 
 class StoicPlugin(private val stoicDir: String, private val socket: LocalSocket) {
@@ -52,7 +52,7 @@ class StoicPlugin(private val stoicDir: String, private val socket: LocalSocket)
         val startPlugin = reader.readNext() as StartPlugin
         minLogLevel = LogLevel.valueOf(startPlugin.minLogLevel)
 
-        Log.d("stoic", "startPlugin: $startPlugin")
+        Log.d("stoic", "startPlugin: $startPlugin (logLevel is $minLogLevel)")
 
         // The pluginJar is relative to the stoicDir
         val pluginJar = "$stoicDir/${startPlugin.pluginJar}"
@@ -78,7 +78,7 @@ class StoicPlugin(private val stoicDir: String, private val socket: LocalSocket)
         val stdout = PrintStream(MessageWriterOutputStream(STDOUT, writer))
         val stderr = PrintStream(MessageWriterOutputStream(STDERR, writer))
 
-        val stoic = Stoic(startPlugin.env, stdin, stdout, stderr)
+        val pluginStoic = Stoic(startPlugin.env, stdin, stdout, stderr)
         Log.d("stoic", "pluginArgs: ${startPlugin.pluginArgs}")
         val args = startPlugin.pluginArgs.toTypedArray()
         val exitCode = try {
@@ -94,7 +94,7 @@ class StoicPlugin(private val stoicDir: String, private val socket: LocalSocket)
 
           // TODO: error message when passing wrong type isn't very good - should we catch
           // Throwable?
-          stoic.callWith {
+          pluginStoic.callWith(forwardUncaught = false, printErrors = false) {
             pluginMain.invoke(null, args)
           }
           0
@@ -115,13 +115,20 @@ class StoicPlugin(private val stoicDir: String, private val socket: LocalSocket)
         Log.d("stoic", "plugin finished")
         writer.writeMessage(PluginFinished(exitCode))
         isFinished.set(true)
-      } catch (e: Exception) {
+      } catch (e: Throwable) {
         Log.e("stoic", "unexpected", e)
 
         // We only close the socket in the event of an exception. Otherwise we want to give
         // the buffering thread(s) a chance to complete their transfers
         socket.close()
+
+        // Bring down the process for non-Exception Throwables
+        if (e !is Exception) {
+          throw e
+        }
       } finally {
+        Log.d("stoic", "Restoring log level to $oldMinLogLevel")
+
         // TODO: Make minLogLevel a thread-local - otherwise this is racy
         minLogLevel = oldMinLogLevel
       }
@@ -146,6 +153,8 @@ class StoicPlugin(private val stoicDir: String, private val socket: LocalSocket)
         } else {
           Log.d("stoic", "stoic plugin input stalled", e)
         }
+      } catch (e: Throwable) {
+        Log.e("stoic", "stoic-plugin-pump unexpected", e)
       }
     }
   }
