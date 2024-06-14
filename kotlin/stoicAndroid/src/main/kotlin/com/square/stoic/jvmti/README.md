@@ -23,6 +23,7 @@ JVMTI APIs, with some differences:
    Kotlin/Java because the depth of frame is not stable. Instead, we use `height` - the count of
    frames from the bottom of the stack to frame we wish to access. The implementation computes the
    depth on-demand and uses this when calling JVMTI. e.g. `nativeGetLocalObject`
+3. Callbacks are invoked on the thread that generates them. 
 
 ## JVMTI/JPDA links
 https://www.pnfsoftware.com/blog/debugging-android-apps-on-android-pie-and-above/

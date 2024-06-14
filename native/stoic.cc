@@ -33,12 +33,33 @@
 typedef struct {
  jvmtiEnv *jvmti;
  jclass stoicJvmtiVmClass;
- jclass stoicJvmtiMethodClass;
+
+ // callbacks
  jmethodID nativeCallbackOnBreakpoint;
+ jmethodID nativeCallbackOnMethodEntry;
+ jmethodID nativeCallbackOnMethodExit;
+
+ // Method stuff
+ jclass stoicJvmtiMethodClass;
  jmethodID stoicJvmtiMethodCtor;
+ jfieldID stoicJvmtiMethodMethodId;
+ jfieldID stoicJvmtiMethodPrivateClazz;
+ jfieldID stoicJvmtiMethodPrivateName;
+ jfieldID stoicJvmtiMethodPrivateSignature;
+ jfieldID stoicJvmtiMethodPrivateGeneric;
+ jfieldID stoicJvmtiMethodPrivateStartLocation;
+ jfieldID stoicJvmtiMethodPrivateEndLocation;
+ jfieldID stoicJvmtiMethodPrivateArgsSize;
+ jfieldID stoicJvmtiMethodPrivateMaxLocals;
 } GlobalAgentData;
  
 static GlobalAgentData *gdata;
+
+// We don't want to process a callback for our callback to the VM
+// TODO: We could probably be more efficient with SetEventNotificationMode
+// TODO: We might want to allow the callback to ask for callbacks to be
+// temporarily re-enabled
+thread_local bool callbacksAllowed = true;
 
 static void
 throwJvmtiError(JNIEnv* jni, int result, const char* desc) {
@@ -193,16 +214,6 @@ Jvmti_VirtualMachine_nativeGetMethodId(JNIEnv *jni, jobject vmClass, jclass claz
   return (jlong) methodId;
 }
 
-JNIEXPORT jlong JNICALL
-Jvmti_VirtualMachine_nativeGetMethodStartLocation(JNIEnv *jni, jobject vmClass, jlong methodId) {
-  jvmtiEnv* jvmti = gdata->jvmti;
-  jlocation startLocation = -1;
-  jlocation endLocation = -1;
-  CHECK_JVMTI(jvmti->GetMethodLocation((jmethodID) methodId, &startLocation, &endLocation));
-  CHECK(startLocation != -1);
-  return startLocation;
-}
-
 JNIEXPORT void JNICALL
 Jvmti_VirtualMachine_nativeSetBreakpoint(JNIEnv *jni, jobject vmClass, jlong methodId, jlong location) {
   jvmtiEnv* jvmti = gdata->jvmti;
@@ -214,6 +225,55 @@ JNIEXPORT void JNICALL
 Jvmti_VirtualMachine_nativeClearBreakpoint(JNIEnv *jni, jobject vmClass, jlong methodId, jlong location) {
   jvmtiEnv* jvmti = gdata->jvmti;
   CHECK_JVMTI(jvmti->ClearBreakpoint((jmethodID) methodId, (jlocation) location));
+}
+
+JNIEXPORT void JNICALL
+Jvmti_VirtualMachine_nativeGetMethodCoreMetadata(JNIEnv *jni, jobject vmClass, jobject method) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+
+  jlong longMethodId = jni->GetLongField(method, gdata->stoicJvmtiMethodMethodId);
+  jmethodID castMethodId = reinterpret_cast<jmethodID>(longMethodId);
+
+  char* name = NULL;
+  char* signature = NULL;
+  char* generic = NULL;
+  CHECK_JVMTI(jvmti->GetMethodName(castMethodId, &name, &signature, &generic));
+  ScopedLocalRef<jstring> jname(jni, jni->NewStringUTF(name));
+  ScopedLocalRef<jstring> jsignature(jni, jni->NewStringUTF(signature));
+  ScopedLocalRef<jstring> jgeneric(jni, jni->NewStringUTF(generic));
+
+  jlocation startLocation = -1;
+  jlocation endLocation = -1;
+
+  jvmtiError error = JVMTI_ERROR_NONE;
+  error = jvmti->GetMethodLocation(castMethodId, &startLocation, &endLocation);
+  if (error != JVMTI_ERROR_NATIVE_METHOD) { CHECK_JVMTI(error); }
+
+  jint argsSize = -1;
+  error = jvmti->GetArgumentsSize(castMethodId, &argsSize);
+  if (error != JVMTI_ERROR_NATIVE_METHOD) { CHECK_JVMTI(error); }
+
+  jint maxLocals = -1;
+  error = jvmti->GetMaxLocals(castMethodId, &maxLocals);
+  if (error != JVMTI_ERROR_NATIVE_METHOD) { CHECK_JVMTI(error); }
+
+  jclass declaringClass = nullptr;
+  CHECK_JVMTI(jvmti->GetMethodDeclaringClass(castMethodId, &declaringClass));
+  jni->SetObjectField(method, gdata->stoicJvmtiMethodPrivateClazz, declaringClass);
+  jni->DeleteLocalRef(declaringClass);
+  declaringClass = nullptr;
+
+  jni->SetObjectField(method, gdata->stoicJvmtiMethodPrivateName, jname.get());
+  jni->SetObjectField(method, gdata->stoicJvmtiMethodPrivateSignature, jsignature.get());
+  jni->SetObjectField(method, gdata->stoicJvmtiMethodPrivateGeneric, jgeneric.get());
+  jni->SetLongField(method, gdata->stoicJvmtiMethodPrivateStartLocation, startLocation);
+  jni->SetLongField(method, gdata->stoicJvmtiMethodPrivateEndLocation, endLocation);
+  jni->SetIntField(method, gdata->stoicJvmtiMethodPrivateArgsSize, argsSize);
+  jni->SetIntField(method, gdata->stoicJvmtiMethodPrivateMaxLocals, maxLocals);
+
+  jvmti->Deallocate((unsigned char*) name);
+  jvmti->Deallocate((unsigned char*) signature);
+  jvmti->Deallocate((unsigned char*) generic);
 }
 
 JNIEXPORT jobject JNICALL
@@ -256,26 +316,6 @@ Jvmti_VirtualMachine_nativeGetLocalVariables(JNIEnv *jni, jobject vmClass, jlong
   table = NULL;
 
   return jTable.release();
-}
-
-JNIEXPORT jint JNICALL
-Jvmti_VirtualMachine_nativeGetArgumentsSize(JNIEnv *jni, jobject vmClass, jlong methodId) {
-  jvmtiEnv* jvmti = gdata->jvmti;
-  jmethodID castMethodId = reinterpret_cast<jmethodID>(methodId);
-  jint size = -1;
-  CHECK_JVMTI(jvmti->GetArgumentsSize(castMethodId, &size));
-
-  return size;
-}
-
-JNIEXPORT jint JNICALL
-Jvmti_VirtualMachine_nativeGetMaxLocals(JNIEnv *jni, jobject vmClass, jlong methodId) {
-  jvmtiEnv* jvmti = gdata->jvmti;
-  jmethodID castMethodId = reinterpret_cast<jmethodID>(methodId);
-  jint maxLocals = -1;
-  CHECK_JVMTI(jvmti->GetMaxLocals(castMethodId, &maxLocals));
-
-  return maxLocals;
 }
 
 JNIEXPORT jobject JNICALL
@@ -338,25 +378,11 @@ Jvmti_VirtualMachine_nativeGetClassMethods(JNIEnv *jni, jobject vmClass, jclass 
   ScopedLocalRef<jobjectArray> jmethods(jni, jni->NewObjectArray(methodCount, gdata->stoicJvmtiMethodClass, NULL));
   CHECK(jmethods.get() != NULL);
   for (int i = 0; i < methodCount; i++) {
-    char* name = NULL;
-    char* signature = NULL;
-    char* generic = NULL;
-    CHECK_JVMTI(jvmti->GetMethodName(methods[i], &name, &signature, &generic));
-    ScopedLocalRef<jstring> jname(jni, jni->NewStringUTF(name));
-    ScopedLocalRef<jstring> jsignature(jni, jni->NewStringUTF(signature));
-    ScopedLocalRef<jstring> jgeneric(jni, jni->NewStringUTF(generic));
-    jvmti->Deallocate((unsigned char*) name);
-    jvmti->Deallocate((unsigned char*) signature);
-    jvmti->Deallocate((unsigned char*) generic);
-
+    jlong longMethodId = reinterpret_cast<jlong>(methods[i]);
     ScopedLocalRef<jobject> method(jni, jni->NewObject(
           gdata->stoicJvmtiMethodClass,
           gdata->stoicJvmtiMethodCtor,
-          clazz,
-          methods[i],
-          jname.get(),
-          jsignature.get(),
-          jgeneric.get()));
+          longMethodId));
 
     jni->SetObjectArrayElement(jmethods.get(), i, method.get());
   }
@@ -383,6 +409,16 @@ Jvmti_VirtualMachine_nativeGetClassSignature(JNIEnv *jni, jobject vmClass, jclas
   gdata->jvmti->Deallocate((unsigned char*) generic);
 
   return jsignature.release();
+}
+
+JNIEXPORT void JNICALL
+Jvmti_VirtualMachine_nativeMethodEntryCallbacks(JNIEnv *jni, jobject vmClass, jthread thread, jboolean isEnabled) {
+  CHECK_JVMTI(gdata->jvmti->SetEventNotificationMode(isEnabled ? JVMTI_ENABLE : JVMTI_DISABLE, JVMTI_EVENT_METHOD_ENTRY, thread));
+}
+
+JNIEXPORT void JNICALL
+Jvmti_VirtualMachine_nativeMethodExitCallbacks(JNIEnv *jni, jobject vmClass, jthread thread, jboolean isEnabled) {
+  CHECK_JVMTI(gdata->jvmti->SetEventNotificationMode(isEnabled ? JVMTI_ENABLE : JVMTI_DISABLE, JVMTI_EVENT_METHOD_EXIT, thread));
 }
 
 struct AgentInfo {
@@ -416,10 +452,86 @@ static AgentInfo* GetAgentInfo(jvmtiEnv* jvmti) {
 
 static void JNICALL
 CbBreakpoint(jvmtiEnv* jvmti, JNIEnv* jni, jthread thread, jmethodID methodId, jlocation location) {
+  if (!callbacksAllowed) {
+    return;
+  }
+
   jint count = -1;
   CHECK_JVMTI(jvmti->GetFrameCount(thread, &count));
 
-  jni->CallStaticVoidMethod(gdata->stoicJvmtiVmClass, gdata->nativeCallbackOnBreakpoint, methodId, location, count);
+  jlong methodIdAsLong = reinterpret_cast<jlong>(methodId);
+
+  callbacksAllowed = false;
+  jni->CallStaticVoidMethod(
+      gdata->stoicJvmtiVmClass,
+      gdata->nativeCallbackOnBreakpoint,
+      methodIdAsLong,
+      location,
+      count);
+  callbacksAllowed = true;
+}
+
+static void JNICALL
+CbMethodEntry(
+    jvmtiEnv* jvmti,
+    JNIEnv* jni,
+    jthread thread,
+    jmethodID methodId) {
+  if (!callbacksAllowed) {
+    return;
+  }
+
+  jint count = -1;
+  CHECK_JVMTI(jvmti->GetFrameCount(thread, &count));
+
+  jmethodID frameMethodId = nullptr;
+  jlocation location = -1;
+  CHECK_JVMTI(jvmti->GetFrameLocation(thread, 0, &frameMethodId, &location));
+  CHECK_EQ(frameMethodId, methodId);
+
+  jlong methodIdAsLong = reinterpret_cast<jlong>(methodId);
+
+  callbacksAllowed = false;
+  jni->CallStaticVoidMethod(
+      gdata->stoicJvmtiVmClass,
+      gdata->nativeCallbackOnMethodEntry,
+      methodIdAsLong,
+      location,
+      count);
+  callbacksAllowed = true;
+}
+
+static void JNICALL
+CbMethodExit(
+    jvmtiEnv* jvmti,
+    JNIEnv* jni,
+    jthread thread,
+    jmethodID methodId,
+    jboolean was_popped_by_exception,
+    jvalue return_value) {
+  if (!callbacksAllowed) {
+    return;
+  }
+
+  jint count = -1;
+  CHECK_JVMTI(jvmti->GetFrameCount(thread, &count));
+
+  jmethodID frameMethodId = nullptr;
+  jlocation location = -1;
+  CHECK_JVMTI(jvmti->GetFrameLocation(thread, 0, &frameMethodId, &location));
+  CHECK_EQ(frameMethodId, methodId);
+  jlong methodIdAsLong = reinterpret_cast<jlong>(methodId);
+
+  // TODO: surface return_value (it's complicated because its a union)
+  callbacksAllowed = false;
+  jni->CallStaticVoidMethod(
+      gdata->stoicJvmtiVmClass,
+      gdata->nativeCallbackOnMethodExit,
+      methodIdAsLong,
+      location,
+      count,
+      was_popped_by_exception);
+  callbacksAllowed = true;
 }
 
 static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) {
@@ -553,20 +665,49 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
     ScopedLocalRef<jclass> klass_stoicJvmtiMethod(jni, (jclass) jni->CallObjectMethod(dexClassLoader.get(), method_ClassLoader_loadClass, stoicJvmtiMethodName.get()));
     CHECK(klass_stoicJvmtiMethod.get() != nullptr);
     gdata->stoicJvmtiMethodClass = (jclass) jni->NewGlobalRef(klass_stoicJvmtiMethod.get());
-    gdata->stoicJvmtiMethodCtor = jni->GetMethodID(gdata->stoicJvmtiMethodClass, "<init>", "(Ljava/lang/Class;JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+
+    gdata->stoicJvmtiMethodCtor = jni->GetMethodID(gdata->stoicJvmtiMethodClass, "<init>", "(J)V");
+    CHECK(gdata->stoicJvmtiMethodCtor != NULL);
+
+    gdata->stoicJvmtiMethodMethodId = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "methodId", "J");
+    CHECK(gdata->stoicJvmtiMethodMethodId != NULL);
+
+    gdata->stoicJvmtiMethodPrivateClazz = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "privateClazz", "Ljava/lang/Class;");
+    CHECK(gdata->stoicJvmtiMethodPrivateClazz != NULL);
+
+    gdata->stoicJvmtiMethodPrivateName = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "privateName", "Ljava/lang/String;");
+    CHECK(gdata->stoicJvmtiMethodPrivateName != NULL);
+
+    gdata->stoicJvmtiMethodPrivateSignature = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "privateSignature", "Ljava/lang/String;");
+    CHECK(gdata->stoicJvmtiMethodPrivateSignature != NULL);
+
+    gdata->stoicJvmtiMethodPrivateGeneric = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "privateGeneric", "Ljava/lang/String;");
+    CHECK(gdata->stoicJvmtiMethodPrivateGeneric != NULL);
+
+    gdata->stoicJvmtiMethodPrivateStartLocation = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "privateStartLocation", "J");
+    CHECK(gdata->stoicJvmtiMethodPrivateStartLocation != NULL);
+
+    gdata->stoicJvmtiMethodPrivateEndLocation = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "privateEndLocation", "J");
+    CHECK(gdata->stoicJvmtiMethodPrivateEndLocation != NULL);
+
+    gdata->stoicJvmtiMethodPrivateArgsSize = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "privateArgsSize", "I");
+    CHECK(gdata->stoicJvmtiMethodPrivateArgsSize != NULL);
+
+    gdata->stoicJvmtiMethodPrivateMaxLocals = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "privateMaxLocals", "I");
+    CHECK(gdata->stoicJvmtiMethodPrivateMaxLocals != NULL);
   }
 
   gdata->nativeCallbackOnBreakpoint = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnBreakpoint", "(JJI)V");
+  gdata->nativeCallbackOnMethodEntry = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnMethodEntry", "(JJI)V");
+  gdata->nativeCallbackOnMethodExit = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnMethodExit", "(JJIZ)V");
 
   JNINativeMethod methods[] = {
     {"nativeGetInstances",              "(Ljava/lang/Class;Z)[Ljava/lang/Object;",                      (void *)&Jvmti_VirtualMachine_nativeGetInstances},
     {"nativeGetMethodId",               "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)J",     (void *)&Jvmti_VirtualMachine_nativeGetMethodId},
-    {"nativeGetMethodStartLocation",    "(J)J",                                                         (void *)&Jvmti_VirtualMachine_nativeGetMethodStartLocation},
     {"nativeSetBreakpoint",             "(JJ)V",                                                        (void *)&Jvmti_VirtualMachine_nativeSetBreakpoint},
     {"nativeClearBreakpoint",           "(JJ)V",                                                        (void *)&Jvmti_VirtualMachine_nativeClearBreakpoint},
+    {"nativeGetMethodCoreMetadata",     "(Lcom/square/stoic/jvmti/Method;)V",                           (void *)&Jvmti_VirtualMachine_nativeGetMethodCoreMetadata},
     {"nativeGetLocalVariables",         "(J)[Lcom/square/stoic/jvmti/LocalVariable;",                   (void *)&Jvmti_VirtualMachine_nativeGetLocalVariables},
-    {"nativeGetArgumentsSize",          "(J)I",                                                         (void *)&Jvmti_VirtualMachine_nativeGetArgumentsSize},
-    {"nativeGetMaxLocals",              "(J)I",                                                         (void *)&Jvmti_VirtualMachine_nativeGetMaxLocals},
     {"nativeGetLocalObject",            "(Ljava/lang/Thread;II)Ljava/lang/Object;",                     (void *)&Jvmti_VirtualMachine_nativeGetLocalObject},
     {"nativeGetLocalInt",               "(Ljava/lang/Thread;II)I",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalInt},
     {"nativeGetLocalLong",              "(Ljava/lang/Thread;II)J",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalLong},
@@ -575,6 +716,8 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
     {"nativeGetClassMethods",           "(Ljava/lang/Class;)[Lcom/square/stoic/jvmti/Method;",          (void *)&Jvmti_VirtualMachine_nativeGetClassMethods},
     {"nativeToReflectedMethod",         "(Ljava/lang/Class;JZ)Ljava/lang/Object;",                      (void *)&Jvmti_VirtualMachine_nativeToReflectedMethod},
     {"nativeGetClassSignature",         "(Ljava/lang/Class;)Ljava/lang/String;",                        (void *)&Jvmti_VirtualMachine_nativeGetClassSignature},
+    {"nativeMethodEntryCallbacks",      "(Ljava/lang/Thread;Z)V",                                       (void *)&Jvmti_VirtualMachine_nativeMethodEntryCallbacks},
+    {"nativeMethodExitCallbacks",       "(Ljava/lang/Thread;Z)V",                                       (void *)&Jvmti_VirtualMachine_nativeMethodExitCallbacks},
   };
 
   CHECK(jni->RegisterNatives(gdata->stoicJvmtiVmClass, methods, sizeof(methods) / sizeof(methods[0])) == JNI_OK);
@@ -673,6 +816,8 @@ static jint AgentStart(JavaVM* vm, char* options, [[maybe_unused]] void* reserve
     .can_tag_objects = JNI_TRUE,
     .can_access_local_variables = JNI_TRUE,
     .can_generate_breakpoint_events = JNI_TRUE,
+    .can_generate_method_entry_events = JNI_TRUE,
+    .can_generate_method_exit_events = JNI_TRUE,
     .can_force_early_return = JNI_TRUE,
   };
   CHECK_JVMTI(jvmti->AddCapabilities(&caps) != JVMTI_ERROR_NONE);
@@ -680,6 +825,8 @@ static jint AgentStart(JavaVM* vm, char* options, [[maybe_unused]] void* reserve
   jvmtiEventCallbacks cb{
     .VMInit = CbVmInit,
     .Breakpoint = CbBreakpoint,
+    .MethodEntry = CbMethodEntry,
+    .MethodExit = CbMethodExit,
   };
   CHECK_JVMTI(jvmti->SetEventCallbacks(&cb, sizeof(cb)));
   CHECK_JVMTI(jvmti->SetEnvironmentLocalStorage(reinterpret_cast<void*>(ai)));

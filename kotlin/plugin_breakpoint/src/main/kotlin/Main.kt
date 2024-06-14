@@ -16,7 +16,7 @@ fun main(args: Array<String>) {
   }
 
   for (arg in args) {
-    jvmti.syncBreakpoint(sigToMethodId(arg).location()) { context ->
+    jvmti.syncBreakpoint(sigToMethodId(arg).startLocation) { context ->
       // Construct the string ahead of time to avoid tearing (which could otherwise happen if
       // multiple threads are writing to stdout simultaneously)
       val sb = StringBuilder("$arg\n")

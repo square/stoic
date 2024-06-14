@@ -5,10 +5,12 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import com.square.stoic.jvmti.BreakpointRequest
-import com.square.stoic.jvmti.EventCallback
-import com.square.stoic.jvmti.EventRequest
 import com.square.stoic.jvmti.Location
-import com.square.stoic.jvmti.StackFrame
+import com.square.stoic.jvmti.MethodEntryRequest
+import com.square.stoic.jvmti.MethodExitRequest
+import com.square.stoic.jvmti.OnBreakpoint
+import com.square.stoic.jvmti.OnMethodEntry
+import com.square.stoic.jvmti.OnMethodExit
 import com.square.stoic.jvmti.VirtualMachine
 import com.square.stoic.threadlocals.stoic
 import java.io.InputStream
@@ -25,8 +27,6 @@ import java.util.concurrent.atomic.AtomicReference
 // used
 internal val internalStoic = ThreadLocal<Stoic>()
 
-typealias OnBreakpoint = (frame: StackFrame) -> Unit
-
 class StoicJvmti private constructor() {
   fun <T> getInstances(clazz: Class<T>, includeSubclasses: Boolean = true): Array<T> {
     return VirtualMachine.nativeGetInstances(clazz, includeSubclasses)
@@ -34,13 +34,29 @@ class StoicJvmti private constructor() {
 
   fun syncBreakpoint(location: Location, onBreakpoint: OnBreakpoint): BreakpointRequest {
     val pluginStoic = stoic
-    return VirtualMachine.eventRequestManager.createBreakpointRequest(location, object: EventCallback {
-      override fun onEvent(frame: StackFrame, events: Iterable<EventRequest>) {
-        pluginStoic.callWith {
-          onBreakpoint(frame)
-        }
+    return VirtualMachine.eventRequestManager.createBreakpointRequest(location) { frame ->
+      pluginStoic.callWith {
+        onBreakpoint(frame)
       }
-    })
+    }
+  }
+
+  fun methodEntries(onMethodEntry: OnMethodEntry): MethodEntryRequest {
+    val pluginStoic = stoic
+    return VirtualMachine.eventRequestManager.createMethodEntryRequest(Thread.currentThread()) { frame ->
+      pluginStoic.callWith {
+        onMethodEntry(frame)
+      }
+    }
+  }
+
+  fun methodExits(onMethodExit: OnMethodExit): MethodExitRequest {
+    val pluginStoic = stoic
+    return VirtualMachine.eventRequestManager.createMethodExitRequest(Thread.currentThread()) { frame, wasPoppedByException ->
+      pluginStoic.callWith {
+        onMethodExit(frame, wasPoppedByException)
+      }
+    }
   }
 
   val virtualMachine: VirtualMachine get() {
@@ -279,6 +295,13 @@ class Stack(stackTrace: Array<StackTraceElement>): Throwable() {
   constructor(stackTrace: List<StackTraceElement>): this(stackTrace.toTypedArray())
   init {
     this.stackTrace = stackTrace
+  }
+}
+
+class LruCache<K, V>(private val cacheSize: Int) : LinkedHashMap<K, V>(cacheSize, 0.75f, true) {
+  override fun removeEldestEntry(eldest: Map.Entry<K, V>): Boolean {
+    // Remove the eldest entry if the size exceeds the predefined cache size
+    return size > cacheSize
   }
 }
 

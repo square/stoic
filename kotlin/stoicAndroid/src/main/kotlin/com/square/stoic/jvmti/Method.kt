@@ -1,5 +1,6 @@
 package com.square.stoic.jvmti
 
+import com.square.stoic.LruCache
 import com.square.stoic.highlander
 
 /**
@@ -8,39 +9,86 @@ import com.square.stoic.highlander
  * See https://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html#method for JVMTI method
  * functions
  */
-class Method(clazz: Class<*>?, val jmethodId: JMethodId, name: String?, signature: String?, generic: String?) {
-  private val privateClazz = clazz
-  private val privateName = name
-  private val privateSignature = signature
-  private val privateGeneric = generic
+class Method private constructor(val methodId: JMethodId) {
+  init { check(methodId != 0L) }
+
+  // These are fetched by nativeGetMethodMetadata
+  private var privateClazz: Class<*>? = null
+  private var privateName: String? = null
+  private var privateSignature: String? = null
+  private var privateGeneric: String? = null
+  private var privateStartLocation: JLocation = Long.MIN_VALUE
+  private var privateEndLocation: JLocation = Long.MIN_VALUE
+  private var privateArgsSize = Int.MIN_VALUE
+  private var privateMaxLocals = Int.MIN_VALUE
+
+  // This is fetched by nativeGetLocalVariables(jmethodId).toList()
+  private var privateVariables: List<LocalVariable<*>>? = null
 
   val clazz: Class<*> get() {
-    if (privateClazz != null) {
-      return privateClazz
-    } else {
-      TODO("Look-up via GetMethodDeclaringClass")
+    val result = privateClazz
+    if (result != null) {
+      return result
     }
+
+    VirtualMachine.nativeGetMethodCoreMetadata(this)
+    return privateClazz!!
   }
 
   val name: String get() {
-    if (privateName != null) { return privateName } else { TODO() }
+    val result = privateName
+    if (result != null) {
+      return result
+    }
+
+    VirtualMachine.nativeGetMethodCoreMetadata(this)
+    return privateName!!
   }
 
   val signature: String get() {
-    if (privateSignature != null) { return privateSignature } else { TODO() }
+    val result = privateSignature
+    if (result != null) {
+      return result
+    }
+
+    VirtualMachine.nativeGetMethodCoreMetadata(this)
+    return privateSignature!!
   }
 
   /**
    * The start of the method
    */
-  fun location(): Location {
-    val jlocation = VirtualMachine.nativeGetMethodStartLocation(jmethodId)
-    return Location(this, jlocation)
+  val startLocation get(): Location {
+    val result = privateStartLocation
+    if (result != Long.MIN_VALUE) {
+      return Location(this, result)
+    }
+
+    VirtualMachine.nativeGetMethodCoreMetadata(this)
+    return Location(this, privateStartLocation)
+  }
+
+  val argsSize get(): Int {
+    val result = privateArgsSize
+    if (result != Int.MIN_VALUE) {
+      return result
+    }
+
+    VirtualMachine.nativeGetMethodCoreMetadata(this)
+    return privateArgsSize
+  }
+
+  val maxLocals get(): Int {
+    val result = privateMaxLocals
+    if (result != Int.MIN_VALUE) {
+      return result
+    }
+
+    VirtualMachine.nativeGetMethodCoreMetadata(this)
+    return privateMaxLocals
   }
 
   val arguments: List<LocalVariable<*>> get() {
-    val argsSize = VirtualMachine.nativeGetArgumentsSize(jmethodId)
-    val maxLocals = VirtualMachine.nativeGetMaxLocals(jmethodId)
     try {
       return variables.filter { it.slot >= maxLocals - argsSize }
     } catch (e: JvmtiException) {
@@ -48,7 +96,7 @@ class Method(clazz: Class<*>?, val jmethodId: JMethodId, name: String?, signatur
         throw e
       }
 
-      val method = VirtualMachine.nativeToReflectedMethod(clazz, jmethodId, false) as java.lang.reflect.Method
+      val method = VirtualMachine.nativeToReflectedMethod(clazz, methodId, false) as java.lang.reflect.Method
       var slot = maxLocals - argsSize
       val vars = mutableListOf<LocalVariable<*>>()
       for (param in method.parameterTypes) {
@@ -65,8 +113,16 @@ class Method(clazz: Class<*>?, val jmethodId: JMethodId, name: String?, signatur
     }
   }
 
-  val variables: List<LocalVariable<*>> get() =
-    VirtualMachine.nativeGetLocalVariables(jmethodId).toList()
+  val variables: List<LocalVariable<*>> get() {
+    val result = privateVariables
+    if (result != null) {
+      return result
+    }
+
+    privateVariables = VirtualMachine.nativeGetLocalVariables(methodId).toList()
+
+    return privateVariables!!
+  }
 
   fun variablesByName(name: String): List<LocalVariable<*>> {
     return variables.filter { it.name == name }
@@ -74,5 +130,20 @@ class Method(clazz: Class<*>?, val jmethodId: JMethodId, name: String?, signatur
 
   fun <T> argumentByName(name: String): LocalVariable<T> {
     return highlander(arguments.filter { it.name == name }) as LocalVariable<T>
+  }
+
+  companion object {
+    private val cache = LruCache<JMethodId, Method>(8192)
+
+    @Synchronized
+    operator fun get(methodId: JMethodId): Method {
+      var method = cache[methodId]
+      if (method == null) {
+        method = Method(methodId)
+        cache[methodId] = method
+      }
+
+      return method
+    }
   }
 }

@@ -1,5 +1,6 @@
 package com.square.stoic.reflect
 
+import com.square.stoic.LruCache
 import com.square.stoic.Stoic
 import com.square.stoic.helpers.*
 import java.lang.reflect.Field
@@ -22,13 +23,6 @@ fun inspect(clazz: Class<*>) {
 
 // Reflection helpers
 val classLoader: ClassLoader = Stoic::class.java.classLoader!!
-
-class LruCache<K, V>(private val cacheSize: Int) : LinkedHashMap<K, V>(cacheSize, 0.75f, true) {
-  override fun removeEldestEntry(eldest: Map.Entry<K, V>): Boolean {
-    // Remove the eldest entry if the size exceeds the predefined cache size
-    return size > cacheSize
-  }
-}
 
 val Class<*>.sm: MagicMethods
   get() {

@@ -77,12 +77,6 @@ object VirtualMachine {
   external fun nativeGetMethodId(clazz: Class<*>, methodName: String, methodSignature: String): JMethodId
 
   @JvmStatic
-  external fun nativeGetMethodStartLocation(jMethodId: JMethodId): JLocation
-
-  @JvmStatic
-  external fun nativeGetMethodEndLocation(jMethodId: JMethodId): JLocation
-
-  @JvmStatic
   external fun nativeSetBreakpoint(jmethodId: JMethodId, jlocation: JLocation)
 
   @JvmStatic
@@ -92,10 +86,7 @@ object VirtualMachine {
   external fun nativeGetLocalVariables(jmethodId: JMethodId): Array<LocalVariable<*>>
 
   @JvmStatic
-  external fun nativeGetArgumentsSize(jmethodId: JMethodId): Int
-
-  @JvmStatic
-  external fun nativeGetMaxLocals(jmethodId: JMethodId): Int
+  external fun nativeGetMethodCoreMetadata(method: Method)
 
   @JvmStatic
   external fun nativeGetLocalObject(thread: Thread, height: Int, slot: Int): Any
@@ -124,12 +115,38 @@ object VirtualMachine {
   @JvmStatic
   external fun nativeGetClassSignature(clazz: Class<*>): String
 
+  @JvmStatic
+  external fun nativeMethodEntryCallbacks(thread: Thread, isEnabled: Boolean)
+
+  @JvmStatic
+  external fun nativeMethodExitCallbacks(thread: Thread, isEnabled: Boolean)
+
   // Callback from native
   @JvmStatic
   fun nativeCallbackOnBreakpoint(jmethodId: JMethodId, jlocation: JLocation, frameCount: Int) {
-    val method = Method(null, jmethodId, null, null, null)
+    val method = Method[jmethodId]
     val location = Location(method, jlocation)
     val frame = StackFrame(Thread.currentThread(), frameCount, location)
     eventRequestManager.onBreakpoint(frame)
+  }
+
+  @JvmStatic
+  fun nativeCallbackOnMethodEntry(jmethodId: JMethodId, jlocation: JLocation, frameCount: Int) {
+    val method = Method[jmethodId]
+    val location = Location(method, jlocation)
+    val frame = StackFrame(Thread.currentThread(), frameCount, location)
+    eventRequestManager.onMethodEntry(frame)
+  }
+
+  @JvmStatic
+  fun nativeCallbackOnMethodExit(
+      jmethodId: JMethodId,
+      jlocation: JLocation,
+      frameCount: Int,
+      wasPoppedByException: Boolean) {
+    val method = Method[jmethodId]
+    val location = Location(method, jlocation)
+    val frame = StackFrame(Thread.currentThread(), frameCount, location)
+    eventRequestManager.onMethodExit(frame, wasPoppedByException)
   }
 }
