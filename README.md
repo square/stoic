@@ -57,7 +57,7 @@ Stoic works on any API 26+ Android device / emulator, with any debuggable app (t
 Stoic bundles a few plugins:
 1. [appexitinfo](https://github.com/square/stoic/blob/main/docs/APPEXITINFO.md) - command-line access to the ApplicationExitInfo API
 2. breakpoint - print when methods get called, optionally with arguments/return-value/stack-trace
-3. crasher - crash your app in interesting ways to see how they get handled
+3. crasher - see how your app handles various types of crashes
 
 
 ## Authoring Plugins
