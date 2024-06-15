@@ -64,15 +64,17 @@ Stoic bundles a few plugins:
 
 Each plugin is a normal Java `main` function. You access debugger functionality via the `com.square.stoic.jvmti` package. e.g.
 ```
+// get callbacks whenever any method of interest is called
 val method = jvmti.virtualMachine.methodBySig("android/view/InputEventReceiver.dispatchInputEvent(ILandroid/view/InputEvent;)V")
 jvmti.syncBreakpoint(method.startLocation) { frame ->
   println("dispatchInputEvent called")
 }
+
+// iterate over bitmap in the heap
 for (bitmap in jvmti.getInstances(Bitmap::class.java)) {
   println("$bitmap: size=${bitmap.allocationByteCount}")
 }
 ```
-
 
 ## Architecture
 
