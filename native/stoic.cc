@@ -31,26 +31,44 @@
 //using namespace std;
 //
 typedef struct {
- jvmtiEnv *jvmti;
- jclass stoicJvmtiVmClass;
-
- // callbacks
- jmethodID nativeCallbackOnBreakpoint;
- jmethodID nativeCallbackOnMethodEntry;
- jmethodID nativeCallbackOnMethodExit;
-
- // Method stuff
- jclass stoicJvmtiMethodClass;
- jmethodID stoicJvmtiMethodCtor;
- jfieldID stoicJvmtiMethodMethodId;
- jfieldID stoicJvmtiMethodPrivateClazz;
- jfieldID stoicJvmtiMethodPrivateName;
- jfieldID stoicJvmtiMethodPrivateSignature;
- jfieldID stoicJvmtiMethodPrivateGeneric;
- jfieldID stoicJvmtiMethodPrivateStartLocation;
- jfieldID stoicJvmtiMethodPrivateEndLocation;
- jfieldID stoicJvmtiMethodPrivateArgsSize;
- jfieldID stoicJvmtiMethodPrivateMaxLocals;
+  jvmtiEnv *jvmti;
+  jclass stoicJvmtiVmClass;
+ 
+  // callbacks
+  jmethodID nativeCallbackOnBreakpoint;
+  jmethodID nativeCallbackOnMethodEntry;
+  jmethodID nativeCallbackOnMethodExit;
+ 
+  // boxing stuff
+  jclass booleanClass;
+  jclass byteClass;
+  jclass characterClass;
+  jclass shortClass;
+  jclass integerClass;
+  jclass longClass;
+  jclass floatClass;
+  jclass doubleClass;
+  jmethodID booleanCtor;
+  jmethodID byteCtor;
+  jmethodID characterCtor;
+  jmethodID shortCtor;
+  jmethodID integerCtor;
+  jmethodID longCtor;
+  jmethodID floatCtor;
+  jmethodID doubleCtor;
+ 
+  // com.square.stoic.jvmti.Method stuff
+  jclass stoicJvmtiMethodClass;
+  jmethodID stoicJvmtiMethodCtor;
+  jfieldID stoicJvmtiMethodMethodId;
+  jfieldID stoicJvmtiMethodPrivateClazz;
+  jfieldID stoicJvmtiMethodPrivateName;
+  jfieldID stoicJvmtiMethodPrivateSignature;
+  jfieldID stoicJvmtiMethodPrivateGeneric;
+  jfieldID stoicJvmtiMethodPrivateStartLocation;
+  jfieldID stoicJvmtiMethodPrivateEndLocation;
+  jfieldID stoicJvmtiMethodPrivateArgsSize;
+  jfieldID stoicJvmtiMethodPrivateMaxLocals;
 } GlobalAgentData;
  
 static GlobalAgentData *gdata;
@@ -501,6 +519,31 @@ CbMethodEntry(
   callbacksAllowed = true;
 }
 
+static jobject
+Box(JNIEnv* jni, char type, jvalue value) {
+  switch (type) {
+    case 'Z': return jni->NewObject(gdata->booleanClass, gdata->booleanCtor, value.z);
+    case 'B': return jni->NewObject(gdata->byteClass, gdata->byteCtor, value.b);
+    case 'C': return jni->NewObject(gdata->characterClass, gdata->characterCtor, value.c);
+    case 'S': return jni->NewObject(gdata->shortClass, gdata->shortCtor, value.s);
+    case 'I': return jni->NewObject(gdata->integerClass, gdata->integerCtor, value.i);
+    case 'J': return jni->NewObject(gdata->longClass, gdata->longCtor, value.j);
+    case 'F': return jni->NewObject(gdata->floatClass, gdata->floatCtor, value.f);
+    case 'D': return jni->NewObject(gdata->doubleClass, gdata->doubleCtor, value.d);
+
+    case 'L':
+    case '[':
+      // NewLocalRef so we can clean it up, just like the others
+      return jni->NewLocalRef(value.l);
+
+    case 'V': return nullptr;
+
+    default:
+      __android_log_print(ANDROID_LOG_INFO, "stoic", "unhandled return type: %c\n", type);
+      return NULL;
+  }
+}
+
 static void JNICALL
 CbMethodExit(
     jvmtiEnv* jvmti,
@@ -522,6 +565,16 @@ CbMethodExit(
   CHECK_EQ(frameMethodId, methodId);
   jlong methodIdAsLong = reinterpret_cast<jlong>(methodId);
 
+  char* signature = NULL;
+  CHECK_JVMTI(jvmti->GetMethodName(methodId, NULL, &signature, NULL));
+  char* closingParen = strchr(signature, ')');
+  CHECK(closingParen != NULL);
+  // The return type is the first character after the ')' - for objects this will be L
+  char returnType = closingParen[1];
+  CHECK_JVMTI(jvmti->Deallocate((unsigned char*) signature));
+
+  ScopedLocalRef<jobject> box(jni, Box(jni, returnType, return_value));
+
   // TODO: surface return_value (it's complicated because its a union)
   callbacksAllowed = false;
   jni->CallStaticVoidMethod(
@@ -530,6 +583,7 @@ CbMethodExit(
       methodIdAsLong,
       location,
       count,
+      box.get(),
       was_popped_by_exception);
   callbacksAllowed = true;
 }
@@ -549,47 +603,31 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
 
   // In order to setup the ClassLoader correctly, we need to chain it to the
   // Application ClassLoader. Otherwise we might end up with duplicate classes
-  // (and weird class casting problems). We find the application via
-  // ActivityThread internals. This could be avoided by using JVMTI to search
-  // the heap to find instances of ClassLoader and then picking the right one.
-  // Or searching the heap to find the instance of Application (assuming there
-  // is only one!)
-  //
-  // TODO: Use Looper.getMainLooper().getThread().getContextClassLoader()
-  // instead
+  // (and weird class casting problems). We find the application class loader
+  // via Looper.getMainLooper().getThread().getContextClassLoader(), which is
+  // considerably more verbose to express via JNI.
 
-  LOG(DEBUG) << "Looking for ActivityThread";
-  ScopedLocalRef<jclass> klass_ActivityThread(jni, jni->FindClass("android/app/ActivityThread"));
-  CHECK(klass_ActivityThread.get() != nullptr);
-  LOG(DEBUG) << "Found ActivityThread";
+  LOG(DEBUG) << "Looking for Looper";
+  ScopedLocalRef<jclass> clsLooper(jni, jni->FindClass("android/os/Looper"));
+  CHECK(clsLooper.get() != nullptr);
+  LOG(DEBUG) << "Found Looper.class";
 
-  jfieldID field_sCurrentActivityThread = jni->GetStaticFieldID(klass_ActivityThread.get(), "sCurrentActivityThread", "Landroid/app/ActivityThread;");
-  CHECK(field_sCurrentActivityThread != nullptr);
-  LOG(DEBUG) << "Found sCurrentActivityThread field";
+  jmethodID mthGetMainLooper = jni->GetStaticMethodID(clsLooper.get(), "getMainLooper", "()Landroid/os/Looper;");
+  CHECK(mthGetMainLooper != nullptr);
+  ScopedLocalRef<jobject> mainLooper(jni, jni->CallStaticObjectMethod(clsLooper.get(), mthGetMainLooper));
+  CHECK(mainLooper.get() != nullptr);
 
-  ScopedLocalRef<jobject> currentActivityThread(jni, jni->GetStaticObjectField(klass_ActivityThread.get(), field_sCurrentActivityThread));
-  CHECK(currentActivityThread.get() != nullptr);
-  LOG(DEBUG) << "Found sCurrentActivityThread";
+  jmethodID mthGetThread = jni->GetMethodID(clsLooper.get(), "getThread", "()Ljava/lang/Thread;");
+  CHECK(mthGetThread != nullptr);
+  ScopedLocalRef<jobject> mainThread(jni, jni->CallObjectMethod(mainLooper.get(), mthGetThread));
 
-  jfieldID field_mInitialApplication = jni->GetFieldID(klass_ActivityThread.get(), "mInitialApplication", "Landroid/app/Application;");
-  CHECK(field_mInitialApplication != nullptr);
-  LOG(DEBUG) << "Found mInitialApplication field";
+  ScopedLocalRef<jclass> clsThread(jni, jni->FindClass("java/lang/Thread"));
+  CHECK(clsThread.get() != nullptr);
 
-  ScopedLocalRef<jobject> application(jni, jni->GetObjectField(currentActivityThread.get(), field_mInitialApplication));
-  CHECK(application.get() != nullptr);
+  jmethodID mthGetContextClassLoader = jni->GetMethodID(clsThread.get(), "getContextClassLoader", "()Ljava/lang/ClassLoader;");
+  CHECK(mthGetContextClassLoader != nullptr);
 
-  ScopedLocalRef<jclass> klass_Class(jni, jni->FindClass("java/lang/Class"));
-  CHECK(klass_Class.get() != nullptr);
-  LOG(DEBUG) << "Found Class";
-
-  ScopedLocalRef<jclass> klass_Application(jni, (jclass) jni->CallObjectMethod(
-      application.get(),
-      jni->GetMethodID(klass_Class.get(), "getClass", "()Ljava/lang/Class;")));
-  CHECK(klass_Application.get() != nullptr);
-
-  ScopedLocalRef<jobject> originalClassLoader(jni, jni->CallObjectMethod(
-      klass_Application.get(),
-      jni->GetMethodID(klass_Class.get(), "getClassLoader", "()Ljava/lang/ClassLoader;")));
+  ScopedLocalRef<jobject> originalClassLoader(jni, jni->CallObjectMethod(mainThread.get(), mthGetContextClassLoader));
   CHECK(originalClassLoader.get() != nullptr);
   LOG(DEBUG) << "Found originalClassLoader";
 
@@ -697,9 +735,31 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
     CHECK(gdata->stoicJvmtiMethodPrivateMaxLocals != NULL);
   }
 
+  // Boxing stuff
+  {
+    // TODO: this leaks local refs
+    gdata->booleanClass = (jclass) jni->NewGlobalRef(jni->FindClass("java/lang/Boolean"));
+    gdata->byteClass = (jclass) jni->NewGlobalRef(jni->FindClass("java/lang/Byte"));
+    gdata->characterClass = (jclass) jni->NewGlobalRef(jni->FindClass("java/lang/Character"));
+    gdata->shortClass = (jclass) jni->NewGlobalRef(jni->FindClass("java/lang/Short"));
+    gdata->integerClass = (jclass) jni->NewGlobalRef(jni->FindClass("java/lang/Integer"));
+    gdata->longClass = (jclass) jni->NewGlobalRef(jni->FindClass("java/lang/Long"));
+    gdata->floatClass = (jclass) jni->NewGlobalRef(jni->FindClass("java/lang/Float"));
+    gdata->doubleClass = (jclass) jni->NewGlobalRef(jni->FindClass("java/lang/Double"));
+
+    gdata->booleanCtor = jni->GetMethodID(gdata->booleanClass, "<init>", "(Z)V");
+    gdata->byteCtor = jni->GetMethodID(gdata->byteClass, "<init>", "(B)V");
+    gdata->characterCtor = jni->GetMethodID(gdata->characterClass, "<init>", "(C)V");
+    gdata->shortCtor = jni->GetMethodID(gdata->shortClass, "<init>", "(S)V");
+    gdata->integerCtor = jni->GetMethodID(gdata->integerClass, "<init>", "(I)V");
+    gdata->longCtor = jni->GetMethodID(gdata->longClass, "<init>", "(J)V");
+    gdata->floatCtor = jni->GetMethodID(gdata->floatClass, "<init>", "(F)V");
+    gdata->doubleCtor = jni->GetMethodID(gdata->doubleClass, "<init>", "(D)V");
+  }
+
   gdata->nativeCallbackOnBreakpoint = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnBreakpoint", "(JJI)V");
   gdata->nativeCallbackOnMethodEntry = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnMethodEntry", "(JJI)V");
-  gdata->nativeCallbackOnMethodExit = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnMethodExit", "(JJIZ)V");
+  gdata->nativeCallbackOnMethodExit = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnMethodExit", "(JJILjava/lang/Object;Z)V");
 
   JNINativeMethod methods[] = {
     {"nativeGetInstances",              "(Ljava/lang/Class;Z)[Ljava/lang/Object;",                      (void *)&Jvmti_VirtualMachine_nativeGetInstances},

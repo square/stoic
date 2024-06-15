@@ -52,9 +52,9 @@ class StoicJvmti private constructor() {
 
   fun methodExits(onMethodExit: OnMethodExit): MethodExitRequest {
     val pluginStoic = stoic
-    return VirtualMachine.eventRequestManager.createMethodExitRequest(Thread.currentThread()) { frame, wasPoppedByException ->
+    return VirtualMachine.eventRequestManager.createMethodExitRequest(Thread.currentThread()) { frame, value, wasPoppedByException ->
       pluginStoic.callWith {
-        onMethodExit(frame, wasPoppedByException)
+        onMethodExit(frame, value, wasPoppedByException)
       }
     }
   }

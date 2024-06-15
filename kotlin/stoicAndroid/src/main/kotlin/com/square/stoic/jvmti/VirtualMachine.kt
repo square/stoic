@@ -143,10 +143,11 @@ object VirtualMachine {
       jmethodId: JMethodId,
       jlocation: JLocation,
       frameCount: Int,
+      value: Any?,
       wasPoppedByException: Boolean) {
     val method = Method[jmethodId]
     val location = Location(method, jlocation)
     val frame = StackFrame(Thread.currentThread(), frameCount, location)
-    eventRequestManager.onMethodExit(frame, wasPoppedByException)
+    eventRequestManager.onMethodExit(frame, value, wasPoppedByException)
   }
 }

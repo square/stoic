@@ -61,21 +61,16 @@ class HostPluginClient(args: PluginParsedArgs) : PluginClient(args) {
       syncDevice()
 
       // TODO: other args
-      var stoicArgsString = "--log ${minLogLevel.level} --pkg ${args.pkg}"
+      var stoicArgs = mutableListOf("--log", minLogLevel.level.toString(), "--pkg", args.pkg)
       if (args.restartApp) {
-        stoicArgsString += " --restart"
-      }
-
-      val pluginArgsString = args.pluginArgs.joinToString(" ") {
-        // TODO: escape each arg
-        it
+        stoicArgs += listOf("--restart")
       }
 
       // Or maybe we provide a `stoic exec` that will delegate to a shell script which will use printf
       // to escape args correctly
 
       return adbShellPb(
-        "$stoicDeviceSyncDir/bin/stoic $stoicArgsString ${args.pluginModule} $pluginArgsString"
+        shellEscapeCmd(listOf("$stoicDeviceSyncDir/bin/stoic") + stoicArgs + listOf(args.pluginModule) + args.pluginArgs)
       ).inheritIO().start().waitFor()
     }
   }

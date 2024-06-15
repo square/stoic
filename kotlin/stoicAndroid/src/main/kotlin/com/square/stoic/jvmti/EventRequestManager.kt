@@ -150,7 +150,7 @@ class EventRequestManager {
     }
   }
 
-  fun onMethodExit(frame: StackFrame, wasPoppedByException: Boolean) {
+  fun onMethodExit(frame: StackFrame, value: Any?, wasPoppedByException: Boolean) {
     var requests: List<MethodExitRequest>
     synchronized(this) {
       // This should always be non-null because we should only be getting callbacks for requests we
@@ -160,7 +160,7 @@ class EventRequestManager {
 
     for (request in requests) {
       if (!request.wasClosed) {
-        request.callback(frame, wasPoppedByException)
+        request.callback(frame, value, wasPoppedByException)
       }
     }
   }

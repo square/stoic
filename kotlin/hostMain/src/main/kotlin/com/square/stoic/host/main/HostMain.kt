@@ -368,3 +368,11 @@ fun syncDevice() {
   ProcessBuilder(listOf("adb", "shell", "chmod -R a-w $stoicDeviceSyncDir/"))
     .start()
 }
+
+fun shellEscapeCmd(cmdArgs: List<String>): String {
+  return if (cmdArgs.isEmpty()) {
+    ""
+  } else {
+    return ProcessBuilder(listOf("bash", "-c", """ printf " %q" "$@" """, "stoic") + cmdArgs).stdout().drop(0)
+  }
+}
