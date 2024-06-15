@@ -19,7 +19,7 @@ Stoic lets you look within your Android processes, giving you the courage to
 take on difficult bugs.
 
 Stoic is a tool for
-1. running code inside another process - without any modifications its APK,
+1. running code inside another process - without any modifications to its APK,
 2. exposing extra capabilities to code, normally only available to a debugger, and
 3. blurring the lines between code and debugger
 
@@ -70,7 +70,7 @@ jvmti.syncBreakpoint(method.startLocation) { frame ->
   println("dispatchInputEvent called")
 }
 
-// iterate over bitmap in the heap
+// iterate over each bitmap in the heap
 for (bitmap in jvmti.getInstances(Bitmap::class.java)) {
   println("$bitmap: size=${bitmap.allocationByteCount}")
 }
@@ -84,7 +84,7 @@ The primary technologies powering Stoic are
 Unix Domain Sockets, `socat`, `rsync`, and `run-as`.
 
 The first time you run Stoic on a process it will attach a jvmti agent which
-will start a server running inside the process. We connect to this server
+will start a server inside the process. We connect to this server
 through a unix domain socket (via `run-as pkg socat ...` for permissions reasons).
 Each socket connection corresponds to a unique plugin. We multiplex
 stdin/stdout/stderr over this connection. See
