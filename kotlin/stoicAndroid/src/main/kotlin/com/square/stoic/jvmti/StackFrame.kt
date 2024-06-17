@@ -34,7 +34,7 @@ class StackFrame(val thread: Thread, val height: Int, val location: Location) {
       "F" -> return VirtualMachine.nativeGetLocalFloat(thread, height, variable.slot) as T
       "D" -> return VirtualMachine.nativeGetLocalDouble(thread, height, variable.slot) as T
       else -> {
-        check(variable.signature.startsWith("L"))
+        check(variable.signature.startsWith("L") || variable.signature.startsWith("["))
         return VirtualMachine.nativeGetLocalObject(thread, height, variable.slot) as T
       }
     }

@@ -5,7 +5,7 @@ import com.square.stoic.helpers.eprintln
 import com.square.stoic.helpers.exit
 import com.square.stoic.helpers.println
 import com.square.stoic.jvmti.LocalVariable
-import com.square.stoic.jvmti.Method
+import com.square.stoic.jvmti.JvmtiMethod
 import com.square.stoic.threadlocals.jvmti
 import java.util.concurrent.CountDownLatch
 
@@ -50,7 +50,7 @@ data class BpDesc(
 )
 
 data class BpSpec(
-  val method: Method,
+  val method: JvmtiMethod,
   val dumpStack: Boolean,
   val hasOnExit: Boolean,
   val printSpecs: List<PrintSpec>,
@@ -88,7 +88,7 @@ fun main(args: Array<String>) {
   }
 
   val bpSpecs = bpDescs.map { bpDesc ->
-    val method = jvmti.virtualMachine.methodBySig(bpDesc.sig)
+    val method = JvmtiMethod.bySig(bpDesc.sig)
     val printSpecs = bpDesc.printDescs.flatMap { printDesc ->
       when (printDesc.expr) {
         "*" -> {

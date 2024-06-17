@@ -1,7 +1,7 @@
 # JVMTI
 
-This is an implementation of something approximating JDI, but instead of being implemented on JDWP
-it is implemented directly on top of JVMTI.
+The JVMTI package implements something approximating JDI, but instead of being
+implemented on JDWP it is implemented directly on top of JVMTI.
 
 It is hoped by using the structure of JDI I avoid running into any design landmines. Since we are
 running in-process, many aspects of JDI can be simplified, so I didn't implement JDI interfaces
@@ -24,6 +24,7 @@ JVMTI APIs, with some differences:
    frames from the bottom of the stack to frame we wish to access. The implementation computes the
    depth on-demand and uses this when calling JVMTI. e.g. `nativeGetLocalObject`
 3. Callbacks are invoked on the thread that generates them. 
+4. Since everything is in-process, there can only be one VirtualMachine, so its a singleton.
 
 ## JVMTI/JPDA links
 https://www.pnfsoftware.com/blog/debugging-android-apps-on-android-pie-and-above/

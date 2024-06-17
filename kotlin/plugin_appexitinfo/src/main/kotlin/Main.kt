@@ -5,7 +5,8 @@ import android.content.Context
 import android.os.StrictMode
 import com.square.stoic.threadlocals.stoic
 import com.square.stoic.helpers.*
-import com.square.stoic.reflect.m
+import com.square.stoic.jvmti.JvmtiClass
+import com.square.stoic.jvmti.magics.*
 import java.lang.reflect.Modifier
 import java.nio.charset.StandardCharsets.UTF_8
 import java.text.SimpleDateFormat
@@ -48,7 +49,6 @@ fun main(args: Array<String>) {
 fun printTabular(exits: List<ApplicationExitInfo>) {
   val headers = listOf("id", "timestamp", "process-name", "reason", "sub-reason", "importance")
   val rows = mutableListOf<List<String>>()
-  var failedSubreason = false
   for (exit in exits) {
     val reasonString = getConstantNameByValue(
       ApplicationExitInfo::class.java,
@@ -69,7 +69,6 @@ fun printTabular(exits: List<ApplicationExitInfo>) {
         exit.m["getSubReason"]() as Int
       )
     } catch (e: ReflectiveOperationException) {
-      failedSubreason = true
       "<unavailable>"
     }
 
@@ -98,26 +97,6 @@ fun printTabular(exits: List<ApplicationExitInfo>) {
 
   for (row in rows) {
     println(formatString.format(*row.toTypedArray()))
-  }
-
-  if (failedSubreason) {
-    eprint("""
-
-      Failed to retrieve sub-reason. This may not be available on the current Android version.
-      Or, you may need to run the following command in order to allow reflective access (you'll also
-      need to restart the app afterward).
-
-          stoic shell settings put global hidden_api_policy 1
-
-      If you use this device for testing, you may want to reset the hidden_api_policy back afterward
-      so you'll see the same behavior as users in production.
-
-          stoic shell settings delete global hidden_api_policy
-
-      See https://developer.android.com/guide/app-compatibility/restrictions-non-sdk-interfaces#general-questions
-      for more information.
-
-    """.trimIndent())
   }
 }
 
@@ -153,12 +132,12 @@ fun decodeIdToEpoch(id: String): Long {
 }
 
 fun getConstantNameByValue(constantsClass: Class<*>, fieldPrefix: String, value: Int, includePrefix: Boolean = false): String {
-  val valueToNameMap = constantsClass.declaredFields
-    .filter { it.type == Int::class.javaPrimitiveType }
+  val valueToNameMap = JvmtiClass[constantsClass].declaredFields
+    .filter { it.signature == "I" }
     .filter { it.modifiers and Modifier.STATIC != 0}
     .filter { it.modifiers and Modifier.FINAL != 0}
     .filter { it.name.startsWith(fieldPrefix) }
-    .associate { it.getInt(null) to it.name }
+    .associate { it.get(null) to it.name }
 
   val result = valueToNameMap[value] ?: return "Unknown constant value: $value"
   return if (includePrefix) { result } else { result.drop(fieldPrefix.length) }

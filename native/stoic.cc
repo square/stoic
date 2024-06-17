@@ -57,7 +57,7 @@ typedef struct {
   jmethodID floatCtor;
   jmethodID doubleCtor;
  
-  // com.square.stoic.jvmti.Method stuff
+  // com.square.stoic.jvmti.JvmtiMethod stuff
   jclass stoicJvmtiMethodClass;
   jmethodID stoicJvmtiMethodCtor;
   jfieldID stoicJvmtiMethodMethodId;
@@ -69,6 +69,17 @@ typedef struct {
   jfieldID stoicJvmtiMethodPrivateEndLocation;
   jfieldID stoicJvmtiMethodPrivateArgsSize;
   jfieldID stoicJvmtiMethodPrivateMaxLocals;
+  jfieldID stoicJvmtiMethodPrivateModifiers;
+
+  // com.square.stoic.jvmti.JvmtiField stuff
+  jclass stoicJvmtiFieldClass;
+  jmethodID stoicJvmtiFieldCtor;
+  jfieldID stoicJvmtiFieldClazz;
+  jfieldID stoicJvmtiFieldFieldId;
+  jfieldID stoicJvmtiFieldPrivateName;
+  jfieldID stoicJvmtiFieldPrivateSignature;
+  jfieldID stoicJvmtiFieldPrivateGeneric;
+  jfieldID stoicJvmtiFieldPrivateModifiers;
 } GlobalAgentData;
  
 static GlobalAgentData *gdata;
@@ -246,10 +257,10 @@ Jvmti_VirtualMachine_nativeClearBreakpoint(JNIEnv *jni, jobject vmClass, jlong m
 }
 
 JNIEXPORT void JNICALL
-Jvmti_VirtualMachine_nativeGetMethodCoreMetadata(JNIEnv *jni, jobject vmClass, jobject method) {
+Jvmti_VirtualMachine_nativeGetMethodCoreMetadata(JNIEnv *jni, jobject vmClass, jobject jvmtiMethod) {
   jvmtiEnv* jvmti = gdata->jvmti;
 
-  jlong longMethodId = jni->GetLongField(method, gdata->stoicJvmtiMethodMethodId);
+  jlong longMethodId = jni->GetLongField(jvmtiMethod, gdata->stoicJvmtiMethodMethodId);
   jmethodID castMethodId = reinterpret_cast<jmethodID>(longMethodId);
 
   char* name = NULL;
@@ -275,19 +286,53 @@ Jvmti_VirtualMachine_nativeGetMethodCoreMetadata(JNIEnv *jni, jobject vmClass, j
   error = jvmti->GetMaxLocals(castMethodId, &maxLocals);
   if (error != JVMTI_ERROR_NATIVE_METHOD) { CHECK_JVMTI(error); }
 
+  jint modifiers = -1;
+  CHECK_JVMTI(jvmti->GetMethodModifiers(castMethodId, &modifiers));
+
   jclass declaringClass = nullptr;
   CHECK_JVMTI(jvmti->GetMethodDeclaringClass(castMethodId, &declaringClass));
-  jni->SetObjectField(method, gdata->stoicJvmtiMethodPrivateClazz, declaringClass);
+  jni->SetObjectField(jvmtiMethod, gdata->stoicJvmtiMethodPrivateClazz, declaringClass);
   jni->DeleteLocalRef(declaringClass);
   declaringClass = nullptr;
 
-  jni->SetObjectField(method, gdata->stoicJvmtiMethodPrivateName, jname.get());
-  jni->SetObjectField(method, gdata->stoicJvmtiMethodPrivateSignature, jsignature.get());
-  jni->SetObjectField(method, gdata->stoicJvmtiMethodPrivateGeneric, jgeneric.get());
-  jni->SetLongField(method, gdata->stoicJvmtiMethodPrivateStartLocation, startLocation);
-  jni->SetLongField(method, gdata->stoicJvmtiMethodPrivateEndLocation, endLocation);
-  jni->SetIntField(method, gdata->stoicJvmtiMethodPrivateArgsSize, argsSize);
-  jni->SetIntField(method, gdata->stoicJvmtiMethodPrivateMaxLocals, maxLocals);
+  jni->SetObjectField(jvmtiMethod, gdata->stoicJvmtiMethodPrivateName, jname.get());
+  jni->SetObjectField(jvmtiMethod, gdata->stoicJvmtiMethodPrivateSignature, jsignature.get());
+  jni->SetObjectField(jvmtiMethod, gdata->stoicJvmtiMethodPrivateGeneric, jgeneric.get());
+  jni->SetLongField(jvmtiMethod, gdata->stoicJvmtiMethodPrivateStartLocation, startLocation);
+  jni->SetLongField(jvmtiMethod, gdata->stoicJvmtiMethodPrivateEndLocation, endLocation);
+  jni->SetIntField(jvmtiMethod, gdata->stoicJvmtiMethodPrivateArgsSize, argsSize);
+  jni->SetIntField(jvmtiMethod, gdata->stoicJvmtiMethodPrivateMaxLocals, maxLocals);
+  jni->SetIntField(jvmtiMethod, gdata->stoicJvmtiMethodPrivateModifiers, modifiers);
+
+  jvmti->Deallocate((unsigned char*) name);
+  jvmti->Deallocate((unsigned char*) signature);
+  jvmti->Deallocate((unsigned char*) generic);
+}
+
+JNIEXPORT void JNICALL
+Jvmti_VirtualMachine_nativeGetFieldCoreMetadata(JNIEnv *jni, jobject vmClass, jobject jvmtiField) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+
+  jlong longFieldId = jni->GetLongField(jvmtiField, gdata->stoicJvmtiFieldFieldId);
+  jfieldID castFieldId = reinterpret_cast<jfieldID>(longFieldId);
+
+  ScopedLocalRef<jclass> clazz(jni, (jclass) jni->GetObjectField(jvmtiField, gdata->stoicJvmtiFieldClazz));
+
+  char* name = NULL;
+  char* signature = NULL;
+  char* generic = NULL;
+  CHECK_JVMTI(jvmti->GetFieldName(clazz.get(), castFieldId, &name, &signature, &generic));
+  ScopedLocalRef<jstring> jname(jni, jni->NewStringUTF(name));
+  ScopedLocalRef<jstring> jsignature(jni, jni->NewStringUTF(signature));
+  ScopedLocalRef<jstring> jgeneric(jni, jni->NewStringUTF(generic));
+
+  jint modifiers = -1;
+  CHECK_JVMTI(jvmti->GetFieldModifiers(clazz.get(), castFieldId, &modifiers));
+
+  jni->SetObjectField(jvmtiField, gdata->stoicJvmtiFieldPrivateName, jname.get());
+  jni->SetObjectField(jvmtiField, gdata->stoicJvmtiFieldPrivateSignature, jsignature.get());
+  jni->SetObjectField(jvmtiField, gdata->stoicJvmtiFieldPrivateGeneric, jgeneric.get());
+  jni->SetIntField(jvmtiField, gdata->stoicJvmtiFieldPrivateModifiers, modifiers);
 
   jvmti->Deallocate((unsigned char*) name);
   jvmti->Deallocate((unsigned char*) signature);
@@ -408,6 +453,37 @@ Jvmti_VirtualMachine_nativeGetClassMethods(JNIEnv *jni, jobject vmClass, jclass 
   jvmti->Deallocate((unsigned char*) methods);
 
   return jmethods.release();
+}
+
+JNIEXPORT jobject JNICALL
+Jvmti_VirtualMachine_nativeGetClassFields(JNIEnv *jni, jobject vmClass, jclass clazz) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  jint fieldCount = -1;
+  jfieldID* fields = NULL;
+  CHECK_JVMTI(jvmti->GetClassFields(clazz, &fieldCount, &fields));
+
+  ScopedLocalRef<jobjectArray> jfields(jni, jni->NewObjectArray(fieldCount, gdata->stoicJvmtiFieldClass, NULL));
+  CHECK(jfields.get() != NULL);
+  for (int i = 0; i < fieldCount; i++) {
+    jlong longFieldId = reinterpret_cast<jlong>(fields[i]);
+    ScopedLocalRef<jobject> field(jni, jni->NewObject(
+          gdata->stoicJvmtiFieldClass,
+          gdata->stoicJvmtiFieldCtor,
+          clazz,
+          longFieldId));
+
+    jni->SetObjectArrayElement(jfields.get(), i, field.get());
+  }
+
+  jvmti->Deallocate((unsigned char*) fields);
+
+  return jfields.release();
+}
+
+JNIEXPORT jobject JNICALL
+Jvmti_VirtualMachine_nativeToReflectedField(JNIEnv *jni, jobject vmClass, jclass clazz, jlong fieldId, jboolean isStatic) {
+  jfieldID castFieldId = reinterpret_cast<jfieldID>(fieldId);
+  return jni->ToReflectedField(clazz, castFieldId, isStatic);
 }
 
 JNIEXPORT jobject JNICALL
@@ -539,7 +615,7 @@ Box(JNIEnv* jni, char type, jvalue value) {
     case 'V': return nullptr;
 
     default:
-      __android_log_print(ANDROID_LOG_INFO, "stoic", "unhandled return type: %c\n", type);
+      __android_log_print(ANDROID_LOG_ERROR, "stoic", "unhandled return type: %c\n", type);
       return NULL;
   }
 }
@@ -696,8 +772,9 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
     gdata->stoicJvmtiVmClass = (jclass) jni->NewGlobalRef(klass_stoicJvmtiVm.get());
   }
 
+  // JvmtiMethod stuff
   {
-    ScopedLocalRef<jstring> stoicJvmtiMethodName(jni, jni->NewStringUTF("com.square.stoic.jvmti.Method"));
+    ScopedLocalRef<jstring> stoicJvmtiMethodName(jni, jni->NewStringUTF("com.square.stoic.jvmti.JvmtiMethod"));
     CHECK(stoicJvmtiMethodName.get() != nullptr);
 
     ScopedLocalRef<jclass> klass_stoicJvmtiMethod(jni, (jclass) jni->CallObjectMethod(dexClassLoader.get(), method_ClassLoader_loadClass, stoicJvmtiMethodName.get()));
@@ -733,6 +810,40 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
 
     gdata->stoicJvmtiMethodPrivateMaxLocals = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "privateMaxLocals", "I");
     CHECK(gdata->stoicJvmtiMethodPrivateMaxLocals != NULL);
+
+    gdata->stoicJvmtiMethodPrivateModifiers = jni->GetFieldID(gdata->stoicJvmtiMethodClass, "privateModifiers", "I");
+    CHECK(gdata->stoicJvmtiMethodPrivateModifiers != NULL);
+  }
+
+  // JvmtiField stuff
+  {
+    ScopedLocalRef<jstring> stoicJvmtiFieldName(jni, jni->NewStringUTF("com.square.stoic.jvmti.JvmtiField"));
+    CHECK(stoicJvmtiFieldName.get() != nullptr);
+
+    ScopedLocalRef<jclass> klass_stoicJvmtiField(jni, (jclass) jni->CallObjectMethod(dexClassLoader.get(), method_ClassLoader_loadClass, stoicJvmtiFieldName.get()));
+    CHECK(klass_stoicJvmtiField.get() != nullptr);
+    gdata->stoicJvmtiFieldClass = (jclass) jni->NewGlobalRef(klass_stoicJvmtiField.get());
+
+    gdata->stoicJvmtiFieldCtor = jni->GetMethodID(gdata->stoicJvmtiFieldClass, "<init>", "(Ljava/lang/Class;J)V");
+    CHECK(gdata->stoicJvmtiFieldCtor != NULL);
+
+    gdata->stoicJvmtiFieldClazz = jni->GetFieldID(gdata->stoicJvmtiFieldClass, "clazz", "Ljava/lang/Class;");
+    CHECK(gdata->stoicJvmtiFieldClazz != NULL);
+
+    gdata->stoicJvmtiFieldFieldId = jni->GetFieldID(gdata->stoicJvmtiFieldClass, "fieldId", "J");
+    CHECK(gdata->stoicJvmtiFieldFieldId != NULL);
+
+    gdata->stoicJvmtiFieldPrivateName = jni->GetFieldID(gdata->stoicJvmtiFieldClass, "privateName", "Ljava/lang/String;");
+    CHECK(gdata->stoicJvmtiFieldPrivateName != NULL);
+
+    gdata->stoicJvmtiFieldPrivateSignature = jni->GetFieldID(gdata->stoicJvmtiFieldClass, "privateSignature", "Ljava/lang/String;");
+    CHECK(gdata->stoicJvmtiFieldPrivateSignature != NULL);
+
+    gdata->stoicJvmtiFieldPrivateGeneric = jni->GetFieldID(gdata->stoicJvmtiFieldClass, "privateGeneric", "Ljava/lang/String;");
+    CHECK(gdata->stoicJvmtiFieldPrivateGeneric != NULL);
+
+    gdata->stoicJvmtiFieldPrivateModifiers = jni->GetFieldID(gdata->stoicJvmtiFieldClass, "privateModifiers", "I");
+    CHECK(gdata->stoicJvmtiFieldPrivateModifiers != NULL);
   }
 
   // Boxing stuff
@@ -766,14 +877,17 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
     {"nativeGetMethodId",               "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)J",     (void *)&Jvmti_VirtualMachine_nativeGetMethodId},
     {"nativeSetBreakpoint",             "(JJ)V",                                                        (void *)&Jvmti_VirtualMachine_nativeSetBreakpoint},
     {"nativeClearBreakpoint",           "(JJ)V",                                                        (void *)&Jvmti_VirtualMachine_nativeClearBreakpoint},
-    {"nativeGetMethodCoreMetadata",     "(Lcom/square/stoic/jvmti/Method;)V",                           (void *)&Jvmti_VirtualMachine_nativeGetMethodCoreMetadata},
+    {"nativeGetMethodCoreMetadata",     "(Lcom/square/stoic/jvmti/JvmtiMethod;)V",                      (void *)&Jvmti_VirtualMachine_nativeGetMethodCoreMetadata},
+    {"nativeGetFieldCoreMetadata",      "(Lcom/square/stoic/jvmti/JvmtiField;)V",                       (void *)&Jvmti_VirtualMachine_nativeGetFieldCoreMetadata},
     {"nativeGetLocalVariables",         "(J)[Lcom/square/stoic/jvmti/LocalVariable;",                   (void *)&Jvmti_VirtualMachine_nativeGetLocalVariables},
     {"nativeGetLocalObject",            "(Ljava/lang/Thread;II)Ljava/lang/Object;",                     (void *)&Jvmti_VirtualMachine_nativeGetLocalObject},
     {"nativeGetLocalInt",               "(Ljava/lang/Thread;II)I",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalInt},
     {"nativeGetLocalLong",              "(Ljava/lang/Thread;II)J",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalLong},
     {"nativeGetLocalFloat",             "(Ljava/lang/Thread;II)F",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalFloat},
     {"nativeGetLocalDouble",            "(Ljava/lang/Thread;II)D",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalDouble},
-    {"nativeGetClassMethods",           "(Ljava/lang/Class;)[Lcom/square/stoic/jvmti/Method;",          (void *)&Jvmti_VirtualMachine_nativeGetClassMethods},
+    {"nativeGetClassMethods",           "(Ljava/lang/Class;)[Lcom/square/stoic/jvmti/JvmtiMethod;",     (void *)&Jvmti_VirtualMachine_nativeGetClassMethods},
+    {"nativeGetClassFields",            "(Ljava/lang/Class;)[Lcom/square/stoic/jvmti/JvmtiField;",      (void *)&Jvmti_VirtualMachine_nativeGetClassFields},
+    {"nativeToReflectedField",          "(Ljava/lang/Class;JZ)Ljava/lang/reflect/Field;",               (void *)&Jvmti_VirtualMachine_nativeToReflectedField},
     {"nativeToReflectedMethod",         "(Ljava/lang/Class;JZ)Ljava/lang/Object;",                      (void *)&Jvmti_VirtualMachine_nativeToReflectedMethod},
     {"nativeGetClassSignature",         "(Ljava/lang/Class;)Ljava/lang/String;",                        (void *)&Jvmti_VirtualMachine_nativeGetClassSignature},
     {"nativeMethodEntryCallbacks",      "(Ljava/lang/Thread;Z)V",                                       (void *)&Jvmti_VirtualMachine_nativeMethodEntryCallbacks},

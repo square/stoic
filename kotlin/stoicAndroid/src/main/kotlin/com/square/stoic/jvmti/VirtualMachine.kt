@@ -1,9 +1,13 @@
 package com.square.stoic.jvmti
 
 import com.square.stoic.highlander
+import java.lang.reflect.Field
 
 // a jmethodID
 typealias JMethodId = Long
+
+// a jfieldID
+typealias JFieldId = Long
 
 // a jlocation
 typealias JLocation = Long
@@ -14,61 +18,6 @@ typealias JLocation = Long
  */
 object VirtualMachine {
   val eventRequestManager: EventRequestManager = EventRequestManager()
-
-  fun concreteMethodByName(clazz: Class<*>, name: String, signature: String): Method {
-    val methods = classMethods(clazz)
-    val filteredMethods = methods.filter { it.name == name && it.signature == signature }
-    if (filteredMethods.isEmpty()) {
-      val filteredByName = methods.filter { it.name == name }
-      if (filteredByName.isNotEmpty()) {
-        val signatures = filteredByName.map { "${it.signature}\n" }
-        throw NoSuchMethodException(
-          """
-            Method ${clazz.name}.$name$signature does not exist. ${clazz.name}.$name with the
-            following signatures exist:
-          """.trimIndent() + "\n$signatures")
-      } else {
-        val methodNames = methods.map { "${it.name}\n" }.toSet()
-        throw NoSuchMethodException("""
-            Method $clazz.$name does not exist. $clazz has methods with the following names:
-          """.trimIndent() + "\n$methodNames")
-      }
-    }
-
-    return highlander(filteredMethods)
-  }
-
-  fun classMethods(clazz: Class<*>): List<Method> {
-    return nativeGetClassMethods(clazz).toList()
-  }
-
-  fun methodBySig(sig: String): Method {
-    val match = Regex("""([^.]+)\.(\w+)(\([^()]*\)[^()]*)""").matchEntire(sig)
-    check(match != null) { "Invalid sig: '$sig'" }
-    val classSig = match.groupValues[1]
-    val methodName = match.groupValues[2]
-    val methodSig = match.groupValues[3]
-    val clazz = classBySig(classSig)
-    return concreteMethodByName(clazz, methodName, methodSig)
-  }
-
-  fun classBySig(sig: String): Class<*> {
-    val className = sig.replace('/', '.')
-    return Class.forName(className)
-  }
-
-  fun allClasses(): List<Class<*>> {
-    TODO()
-  }
-
-//  fun classesByName(name: String): List<ReferenceType> {
-    // The JDWP implementation just calls GetLoadedClasses and iterates through them
-    // https://cs.android.com/android/platform/superproject/main/+/main:external/oj-libjdwp/src/share/back/VirtualMachineImpl.c;l=104
-    //
-    // But GetLoadedClasses just returns an array of jclass. Seems like we could just call
-    // Class.forName instead.
-//    TODO()
-//  }
 
   @JvmStatic
   external fun <T> nativeGetInstances(clazz: Class<T>, includeSubclasses: Boolean): Array<T>
@@ -86,7 +35,10 @@ object VirtualMachine {
   external fun nativeGetLocalVariables(jmethodId: JMethodId): Array<LocalVariable<*>>
 
   @JvmStatic
-  external fun nativeGetMethodCoreMetadata(method: Method)
+  external fun nativeGetMethodCoreMetadata(method: JvmtiMethod)
+
+  @JvmStatic
+  external fun nativeGetFieldCoreMetadata(method: JvmtiField)
 
   @JvmStatic
   external fun nativeGetLocalObject(thread: Thread, height: Int, slot: Int): Any
@@ -104,11 +56,20 @@ object VirtualMachine {
   external fun nativeGetLocalDouble(thread: Thread, height: Int, slot: Int): Double
 
   @JvmStatic
-  external fun nativeGetClassMethods(clazz: Class<*>): Array<Method>
+  external fun nativeGetClassMethods(clazz: Class<*>): Array<JvmtiMethod>
+
+  @JvmStatic
+  external fun nativeGetClassFields(clazz: Class<*>): Array<JvmtiField>
+
+  //@JvmStatic
+  //external fun nativeInvokeMethod(isStatic: Boolean, methodId: JMethodId, args: Array<Any>)
 
   // Returns either java.lang.reflect.Method or java.lang.reflect.Constructor
   @JvmStatic
   external fun nativeToReflectedMethod(clazz: Class<*>, methodId: JMethodId, isStatic: Boolean): Any
+
+  @JvmStatic
+  external fun nativeToReflectedField(clazz: Class<*>, fieldId: JFieldId, isStatic: Boolean): Field
 
   // TODO: the actual API also returns genericSignature - this should probably return a pair of
   // Strings
@@ -124,7 +85,7 @@ object VirtualMachine {
   // Callback from native
   @JvmStatic
   fun nativeCallbackOnBreakpoint(jmethodId: JMethodId, jlocation: JLocation, frameCount: Int) {
-    val method = Method[jmethodId]
+    val method = JvmtiMethod[jmethodId]
     val location = Location(method, jlocation)
     val frame = StackFrame(Thread.currentThread(), frameCount, location)
     eventRequestManager.onBreakpoint(frame)
@@ -132,7 +93,7 @@ object VirtualMachine {
 
   @JvmStatic
   fun nativeCallbackOnMethodEntry(jmethodId: JMethodId, jlocation: JLocation, frameCount: Int) {
-    val method = Method[jmethodId]
+    val method = JvmtiMethod[jmethodId]
     val location = Location(method, jlocation)
     val frame = StackFrame(Thread.currentThread(), frameCount, location)
     eventRequestManager.onMethodEntry(frame)
@@ -145,7 +106,7 @@ object VirtualMachine {
       frameCount: Int,
       value: Any?,
       wasPoppedByException: Boolean) {
-    val method = Method[jmethodId]
+    val method = JvmtiMethod[jmethodId]
     val location = Location(method, jlocation)
     val frame = StackFrame(Thread.currentThread(), frameCount, location)
     eventRequestManager.onMethodExit(frame, value, wasPoppedByException)

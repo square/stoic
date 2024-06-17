@@ -2,6 +2,8 @@ package com.square.stoic.jvmti
 
 import com.square.stoic.LruCache
 import com.square.stoic.highlander
+import java.lang.reflect.Constructor
+import java.lang.reflect.Modifier
 
 /**
  * Analogous to https://docs.oracle.com/javase/8/docs/jdk/api/jpda/jdi/com/sun/jdi/Method.html
@@ -9,10 +11,10 @@ import com.square.stoic.highlander
  * See https://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html#method for JVMTI method
  * functions
  */
-class Method private constructor(val methodId: JMethodId) {
+class JvmtiMethod private constructor(val methodId: JMethodId) {
   init { check(methodId != 0L) }
 
-  // These are fetched by nativeGetMethodMetadata
+  // These are fetched by nativeGetMethodCoreMetadata
   private var privateClazz: Class<*>? = null
   private var privateName: String? = null
   private var privateSignature: String? = null
@@ -21,6 +23,8 @@ class Method private constructor(val methodId: JMethodId) {
   private var privateEndLocation: JLocation = Long.MIN_VALUE
   private var privateArgsSize = Int.MIN_VALUE
   private var privateMaxLocals = Int.MIN_VALUE
+  private var privateModifiers: Int = -1
+  private var privateReflected: Any? = null
 
   // This is fetched by nativeGetLocalVariables(jmethodId).toList()
   private var privateVariables: List<LocalVariable<*>>? = null
@@ -88,6 +92,29 @@ class Method private constructor(val methodId: JMethodId) {
     return privateMaxLocals
   }
 
+  val modifiers get(): Int {
+    val result = privateModifiers
+    if (result != -1) {
+      return result
+    }
+
+    // -1 is an invalid value for modifiers (it's all modifiers set), so if we see -1 we know we
+    // need to fetch
+    VirtualMachine.nativeGetMethodCoreMetadata(this)
+    return privateModifiers
+  }
+
+  val reflected get(): Any {
+    val result = privateReflected
+    if (result != null) {
+      return result
+    }
+
+    val lookup = VirtualMachine.nativeToReflectedMethod(clazz, methodId, Modifier.isStatic(modifiers))
+    privateReflected = lookup
+    return lookup
+  }
+
   val arguments: List<LocalVariable<*>> get() {
     try {
       return variables.filter { it.slot >= maxLocals - argsSize }
@@ -132,18 +159,39 @@ class Method private constructor(val methodId: JMethodId) {
     return highlander(arguments.filter { it.name == name }) as LocalVariable<T>
   }
 
+  fun invokeStatic(vararg args: Any?): Any? {
+    return (reflected as java.lang.reflect.Method).invoke(null, *args)
+  }
+
+  fun invokeCtor(vararg args: Any?): Any? {
+    return (reflected as Constructor<*>).newInstance(*args)
+  }
+
+  fun invokeNormal(thiz: Any, vararg args: Any?): Any? {
+    return (reflected as java.lang.reflect.Method).invoke(thiz, *args)
+  }
+
   companion object {
-    private val cache = LruCache<JMethodId, Method>(8192)
+    private val cache = LruCache<JMethodId, JvmtiMethod>(8192)
 
     @Synchronized
-    operator fun get(methodId: JMethodId): Method {
+    operator fun get(methodId: JMethodId): JvmtiMethod {
       var method = cache[methodId]
       if (method == null) {
-        method = Method(methodId)
+        method = JvmtiMethod(methodId)
         cache[methodId] = method
       }
 
       return method
+    }
+
+    fun bySig(sig: String): JvmtiMethod {
+      val match = Regex("""([^.]+)\.(\w+)(\([^()]*\)[^()]*)""").matchEntire(sig)
+      check(match != null) { "Invalid sig: '$sig'" }
+      val classSig = match.groupValues[1]
+      val methodName = match.groupValues[2]
+      val methodSig = match.groupValues[3]
+      return JvmtiClass.bySig(classSig).declaredMethod(methodName, methodSig)
     }
   }
 }
