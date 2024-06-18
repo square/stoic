@@ -45,10 +45,10 @@ class MagicMethods(private val obj: Any?, private val clazz: JvmtiClass) {
       } else if (candidates.size > 1) {
         // TODO: also consider superclass candidates
         val sigs = candidates.map { it.signature }
-        throw Exception("method[$name] - use method[$name, sig] syntax, where sig is any of $sigs")
+        throw Exception("method[$name, $jvmSig] - use method[$name, sig] syntax, where sig is any of $sigs")
       } else {
         if (clazz.clazz.superclass != null) {
-          resolve(JvmtiClass[clazz.clazz.superclass], name, null)
+          resolve(JvmtiClass[clazz.clazz.superclass], name, jvmSig)
         } else {
           throw NoSuchMethodException()
         }

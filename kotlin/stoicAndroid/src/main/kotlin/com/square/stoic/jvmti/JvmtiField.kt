@@ -41,11 +41,15 @@ class JvmtiField private constructor(val clazz: Class<*>, val fieldId: JFieldId)
   }
 
   fun get(obj: Any?): Any? {
-    return VirtualMachine.nativeToReflectedField(clazz, fieldId, Modifier.isStatic(modifiers)).get(obj)
+    val reflected =  VirtualMachine.nativeToReflectedField(clazz, fieldId, Modifier.isStatic(modifiers))
+    reflected.isAccessible = true
+    return reflected.get(obj)
   }
 
   fun set(obj: Any?, value: Any?) {
-    VirtualMachine.nativeToReflectedField(clazz, fieldId, Modifier.isStatic(modifiers)).set(obj, value)
+    val reflected = VirtualMachine.nativeToReflectedField(clazz, fieldId, Modifier.isStatic(modifiers))
+    reflected.isAccessible = true
+    reflected.set(obj, value)
   }
 
   companion object {

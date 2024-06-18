@@ -3,6 +3,7 @@ package com.square.stoic.jvmti
 import com.square.stoic.LruCache
 import com.square.stoic.highlander
 import java.lang.reflect.Constructor
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 /**
@@ -123,10 +124,15 @@ class JvmtiMethod private constructor(val methodId: JMethodId) {
         throw e
       }
 
-      val method = VirtualMachine.nativeToReflectedMethod(clazz, methodId, false) as java.lang.reflect.Method
+      val methodOrCtor = VirtualMachine.nativeToReflectedMethod(clazz, methodId, false)
+      val parameterTypes = if (methodOrCtor is Constructor<*>) {
+        methodOrCtor.parameterTypes
+      } else {
+        (methodOrCtor as Method).parameterTypes
+      }
       var slot = maxLocals - argsSize
       val vars = mutableListOf<LocalVariable<*>>()
-      for (param in method.parameterTypes) {
+      for (param in parameterTypes) {
         val slotSize = when (param) {
           java.lang.Long.TYPE, java.lang.Double.TYPE -> 2
           else -> 1
@@ -140,13 +146,32 @@ class JvmtiMethod private constructor(val methodId: JMethodId) {
     }
   }
 
+  @get:Synchronized
   val variables: List<LocalVariable<*>> get() {
     val result = privateVariables
     if (result != null) {
       return result
     }
 
-    privateVariables = VirtualMachine.nativeGetLocalVariables(methodId).toList()
+    // We need to remove duplicate variables (ones that have the same slot), preferring ones with
+    // non-null names. See testDuplicateArguments for an example of a method with duplicate
+    // variables. We prefer named variables.
+    val locals = VirtualMachine.nativeGetLocalVariables(methodId)
+    val slotToIndex = mutableMapOf<Int, Int>()
+    for (i in locals.indices) {
+      val slot = locals[i].slot
+      val dupeIndex = slotToIndex[slot]
+      if (dupeIndex == null) {
+        slotToIndex[slot] = i
+        continue
+      }
+
+      if (locals[dupeIndex].name == null && locals[i].name != null) {
+        slotToIndex[slot] = i
+      }
+    }
+
+    privateVariables = slotToIndex.entries.sortedBy { it.key }.map { locals[it.value] }
 
     return privateVariables!!
   }
