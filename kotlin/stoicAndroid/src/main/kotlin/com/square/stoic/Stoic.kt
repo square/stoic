@@ -28,8 +28,12 @@ import java.util.concurrent.atomic.AtomicReference
 internal val internalStoic = ThreadLocal<Stoic>()
 
 class StoicJvmti private constructor() {
-  fun <T> getInstances(clazz: Class<T>, includeSubclasses: Boolean = true): Array<T> {
-    return VirtualMachine.nativeGetInstances(clazz, includeSubclasses)
+  fun <T> instances(clazz: Class<T>, includeSubclasses: Boolean = true): Array<out T> {
+    return VirtualMachine.nativeInstances(clazz, includeSubclasses)
+  }
+
+  fun <T> subclasses(clazz: Class<T>): Array<Class<out T>> {
+    return VirtualMachine.nativeSubclasses(clazz)
   }
 
   fun syncBreakpoint(location: Location, onBreakpoint: OnBreakpoint): BreakpointRequest {

@@ -81,6 +81,8 @@ class StoicPlugin(private val stoicDir: String, private val socket: LocalSocket)
         val pluginStoic = Stoic(startPlugin.env, stdin, stdout, stderr)
         Log.d("stoic", "pluginArgs: ${startPlugin.pluginArgs}")
         val args = startPlugin.pluginArgs.toTypedArray()
+        val oldClassLoader = Thread.currentThread().contextClassLoader
+        Thread.currentThread().contextClassLoader = classLoader
         val exitCode = try {
           Log.d("stoic", "made classLoader: $classLoader (parent: $parentClassLoader)")
 
@@ -109,6 +111,9 @@ class StoicPlugin(private val stoicDir: String, private val socket: LocalSocket)
         } catch (e: ExitCodeException) {
           Log.d("stoic", "plugin threw exit code exception", e)
           e.code
+        } finally {
+          // Restore previous classloader
+          Thread.currentThread().contextClassLoader = oldClassLoader
         }
 
         // TODO: Good error message if the plugin closes stdin/stdout/stderr prematurely

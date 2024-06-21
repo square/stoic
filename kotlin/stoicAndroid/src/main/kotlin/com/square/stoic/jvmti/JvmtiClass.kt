@@ -7,6 +7,8 @@ class JvmtiClass private constructor(val clazz: Class<*>) {
   private var privateDeclaredFields: List<JvmtiField>? = null
   private var privateDeclaredMethods: List<JvmtiMethod>? = null
 
+  val simpleName get(): String = clazz.name.substringAfterLast('.')
+
   val declaredFields get(): List<JvmtiField> {
     synchronized(this) {
       return privateDeclaredFields ?: run {
@@ -69,9 +71,20 @@ class JvmtiClass private constructor(val clazz: Class<*>) {
     }
 
     fun bySig(signature: String, classLoader: ClassLoader? = null): JvmtiClass {
-      val className = signature.replace('/', '.')
+      when (signature) {
+        "I" -> return JvmtiClass[Int::class.java]
+        "J" -> return JvmtiClass[Long::class.java]
+      }
+
+      val classNameWithDots = signature.replace('/', '.')
+      val className = if (classNameWithDots.endsWith(';')) {
+        classNameWithDots.removePrefix("L").removeSuffix(";")
+      } else {
+        classNameWithDots
+      }
+
       val clazz = if (classLoader == null) {
-        Class.forName(className)
+        Thread.currentThread().contextClassLoader.loadClass(className)
       } else {
         classLoader.loadClass(className)
       }

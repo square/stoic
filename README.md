@@ -71,7 +71,7 @@ jvmti.syncBreakpoint(method.startLocation) { frame ->
 }
 
 // iterate over each bitmap in the heap
-for (bitmap in jvmti.getInstances(Bitmap::class.java)) {
+for (bitmap in jvmti.instances(Bitmap::class.java)) {
   println("$bitmap: size=${bitmap.allocationByteCount}")
 }
 ```

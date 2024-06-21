@@ -20,7 +20,10 @@ object VirtualMachine {
   val eventRequestManager: EventRequestManager = EventRequestManager()
 
   @JvmStatic
-  external fun <T> nativeGetInstances(clazz: Class<T>, includeSubclasses: Boolean): Array<T>
+  external fun <T> nativeInstances(clazz: Class<T>, includeSubclasses: Boolean): Array<out T>
+
+  @JvmStatic
+  external fun <T> nativeSubclasses(clazz: Class<T>): Array<Class<out T>>
 
   @JvmStatic
   external fun nativeGetMethodId(clazz: Class<*>, methodName: String, methodSignature: String): JMethodId

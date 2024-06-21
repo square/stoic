@@ -196,6 +196,10 @@ class JvmtiMethod private constructor(val methodId: JMethodId) {
     return (reflected as java.lang.reflect.Method).invoke(thiz, *args)
   }
 
+  val jvmtiClass get() = JvmtiClass[clazz]
+
+  val simpleQualifiedName = "${jvmtiClass.simpleName}.$name"
+
   companion object {
     private val cache = LruCache<JMethodId, JvmtiMethod>(8192)
 

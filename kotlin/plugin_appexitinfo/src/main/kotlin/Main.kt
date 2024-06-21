@@ -21,7 +21,7 @@ fun main(args: Array<String>) {
   }
 
   eprint("Searching heap for instances of android.app.Application")
-  val apps = stoic.jvmti.getInstances(Application::class.java)
+  val apps = stoic.jvmti.instances(Application::class.java)
   eprint("\r\u001B[K")
 
   for (app in apps) {
@@ -206,7 +206,7 @@ fun formatDetailedAppExitInfo(exit: ApplicationExitInfo): String {
       exit.traceInputStream?.bufferedReader(UTF_8).use { it?.readText()?.trim() }
     }
     ApplicationExitInfo.REASON_CRASH_NATIVE -> {
-      "TODO: Use https://android.googlesource.com/platform/system/core/+/refs/heads/master/debuggerd/proto/tombstone.proto to parse trace-input-stream"
+      "TODO: Use https://android.googlesource.com/platform/system/core/+/refs/heads/master/debuggerd/proto/tombstone.proto to parse com.square.stoic.trace.trace-input-stream"
     }
     else -> ""
   }

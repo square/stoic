@@ -127,7 +127,7 @@ jvmtiHeapIterationCallback_untagUnconditionally(jlong class_tag, jlong size, jlo
 }
 
 JNIEXPORT jobject JNICALL
-Jvmti_VirtualMachine_nativeGetInstances(JNIEnv *jni, jobject vmClass, jclass klass, jboolean includeSubclasses) {
+Jvmti_VirtualMachine_nativeInstances(JNIEnv *jni, jobject vmClass, jclass klass, jboolean includeSubclasses) {
   jvmtiEnv* jvmti = gdata->jvmti;
 
   // Clear all tags in the heap
@@ -179,6 +179,9 @@ Jvmti_VirtualMachine_nativeGetInstances(JNIEnv *jni, jobject vmClass, jclass kla
       }
     }
 
+    CHECK_JVMTI(jvmti->Deallocate((unsigned char*) obj_list));
+    obj_list = NULL;
+
     // Tag every object whose class is tagged
     {
       jvmtiHeapCallbacks callbacks = {
@@ -228,6 +231,86 @@ Jvmti_VirtualMachine_nativeGetInstances(JNIEnv *jni, jobject vmClass, jclass kla
     ScopedLocalRef<jobject> obj(jni, obj_list[i]);
     jni->SetObjectArrayElement(klassArray, i, obj.get());
   }
+
+  CHECK_JVMTI(jvmti->Deallocate((unsigned char*) obj_list));
+  obj_list = NULL;
+
+  return klassArray;
+}
+
+JNIEXPORT jobject JNICALL
+Jvmti_VirtualMachine_nativeSubclasses(JNIEnv *jni, jobject vmClass, jclass klass) {
+  jvmtiEnv* jvmti = gdata->jvmti;
+  // TODO: verify VirtualMachine.class lock held
+
+  // Clear all tags in the heap
+  {
+    jvmtiHeapCallbacks callbacks = {
+      .heap_iteration_callback = jvmtiHeapIterationCallback_untagUnconditionally,
+    };
+
+    CHECK_JVMTI(jvmti->IterateThroughHeap(
+          JVMTI_HEAP_FILTER_UNTAGGED,
+          nullptr,
+          &callbacks,
+          nullptr));
+  }
+
+  // klassClass = java.lang.Class
+  ScopedLocalRef<jclass> klassClass(jni, jni->FindClass("java/lang/Class"));
+  if (!klassClass.get()) {
+      jni->ExceptionDescribe();
+      jni->ExceptionClear();
+      return nullptr;
+  }
+
+  // Tag every Class object
+  jlong tag = 1;
+  CHECK_JVMTI(jvmti->IterateOverInstancesOfClass(
+        klassClass.get(),
+        JVMTI_HEAP_OBJECT_EITHER,
+        jvmtiHeapObjectCallback_tagUnconditionally,
+        &tag));
+
+  // Iterate through every Class object, clearing the tags of classes that aren't subclasses of klass
+  jobject* obj_list = NULL;
+  jint obj_len = -1;
+  const jlong tagOne = 1;
+  CHECK_JVMTI(jvmti->GetObjectsWithTags(1, &tagOne, &obj_len, &obj_list, nullptr));
+  jmethodID method_isAssignableFrom = jni->GetMethodID(klassClass.get(), "isAssignableFrom", "(Ljava/lang/Class;)Z");
+  CHECK(method_isAssignableFrom != nullptr);
+  for (int i = 0; i < obj_len; i++) {
+    ScopedLocalRef<jobject> klassCandidate(jni, obj_list[i]);
+
+    // Never throws (famous last words?)
+    jboolean isAssignable = jni->CallBooleanMethod(klass, method_isAssignableFrom, klassCandidate.get());
+    
+    if (!isAssignable) {
+      jlong tagZero = 0;
+      CHECK_JVMTI(jvmti->SetTag(klassCandidate.get(), tagZero));
+    }
+  }
+
+  CHECK_JVMTI(jvmti->Deallocate((unsigned char*) obj_list));
+  obj_list = NULL;
+
+  // Get all of the objects tagged with 1
+  obj_len = -1;
+  CHECK_JVMTI(jvmti->GetObjectsWithTags(1, &tagOne, &obj_len, &obj_list, nullptr));
+ 
+  jobjectArray klassArray = jni->NewObjectArray(obj_len, klassClass.get(), NULL);
+  if (klassArray == nullptr) {
+    LOG(ERROR) << "NewObjectArray failed";
+    return nullptr;
+  }
+ 
+  for (int i = 0; i < obj_len; i++) {
+    ScopedLocalRef<jobject> obj(jni, obj_list[i]);
+    jni->SetObjectArrayElement(klassArray, i, obj.get());
+  }
+
+  CHECK_JVMTI(jvmti->Deallocate((unsigned char*) obj_list));
+  obj_list = NULL;
 
   return klassArray;
 }
@@ -873,7 +956,8 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
   gdata->nativeCallbackOnMethodExit = jni->GetStaticMethodID(gdata->stoicJvmtiVmClass, "nativeCallbackOnMethodExit", "(JJILjava/lang/Object;Z)V");
 
   JNINativeMethod methods[] = {
-    {"nativeGetInstances",              "(Ljava/lang/Class;Z)[Ljava/lang/Object;",                      (void *)&Jvmti_VirtualMachine_nativeGetInstances},
+    {"nativeInstances",                 "(Ljava/lang/Class;Z)[Ljava/lang/Object;",                      (void *)&Jvmti_VirtualMachine_nativeInstances},
+    {"nativeSubclasses",                "(Ljava/lang/Class;)[Ljava/lang/Class;",                        (void *)&Jvmti_VirtualMachine_nativeSubclasses},
     {"nativeGetMethodId",               "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)J",     (void *)&Jvmti_VirtualMachine_nativeGetMethodId},
     {"nativeSetBreakpoint",             "(JJ)V",                                                        (void *)&Jvmti_VirtualMachine_nativeSetBreakpoint},
     {"nativeClearBreakpoint",           "(JJ)V",                                                        (void *)&Jvmti_VirtualMachine_nativeClearBreakpoint},

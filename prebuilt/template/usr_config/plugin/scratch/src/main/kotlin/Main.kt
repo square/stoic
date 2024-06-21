@@ -35,7 +35,7 @@ import com.square.stoic.threadlocals.jvmti
  * stoic plugins.
  */
 fun main(args: Array<String>) {
-  val instances = jvmti.getInstances(Application::class.java)
+  val instances = jvmti.instances(Application::class.java)
   if (instances.size != 1) {
     eprintln("Expected exactly one Application, but found: $instances")
     exit(1)

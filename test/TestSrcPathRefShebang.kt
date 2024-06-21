@@ -15,7 +15,7 @@ import com.square.stoic.jvmti
 @Suppress("UNUSED_PARAMETER")
 fun main(args: List<String>): Int {
   val pkg = if (isAndroid) {
-    val apps = jvmti.getInstances(Application::class.java)
+    val apps = jvmti.instances(Application::class.java)
     apps[0].packageName
   } else {
     "jvm"

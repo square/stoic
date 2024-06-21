@@ -16,7 +16,7 @@ Raw JVMTI functionality is exposed as static JNI functions on com.square.stoic.j
 `nativeCallback*` methods are JVMTI callbacks invoked from native. All other `native*` methods are
 JVMTI APIs, with some differences:
 1. Instead of exposing tagging to Kotlin/Java, I've instead of opted to expose higher level APIs
-   built on top of tagging - e.g. nativeGetInstances (note: there are currently race conditions here
+   built on top of tagging - e.g. nativeInstances (note: there are currently race conditions here
    - we should acquire a lock while tagging since the tags are global)
 2. Many JVMTI APIs take a `depth` parameter - the count of frames between the current frame of the
    thread and the frame we wish to access. This doesn't make sense when calling APIs from
