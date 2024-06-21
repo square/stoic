@@ -63,6 +63,7 @@ data class PluginFinished(val exitCode: Int)
 
 
 class MessageWriter(val dataOutputStream : DataOutputStream) {
+  @Synchronized
   fun writeMessage(msg: Any) {
     logVerbose { "writing: $msg" }
     val msgType = when (msg) {
@@ -100,6 +101,7 @@ class MessageWriter(val dataOutputStream : DataOutputStream) {
 }
 
 class MessageReader(val dataInputStream: DataInputStream) {
+  @Synchronized
   fun readNext(): Any {
     logVerbose { "readNext: attempting to read msgType" }
     val msgType = dataInputStream.readInt()
