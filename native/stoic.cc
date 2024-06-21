@@ -330,7 +330,7 @@ JNIEXPORT void JNICALL
 Jvmti_VirtualMachine_nativeSetBreakpoint(JNIEnv *jni, jobject vmClass, jlong methodId, jlong location) {
   jvmtiEnv* jvmti = gdata->jvmti;
   jmethodID castMethodId = reinterpret_cast<jmethodID>(methodId);
-  CHECK_JVMTI(jvmti->SetBreakpoint(castMethodId, location));
+  JVMTI_THROW_IF_ERROR(jvmti->SetBreakpoint(castMethodId, location), ;);
 }
 
 JNIEXPORT void JNICALL

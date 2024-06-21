@@ -72,6 +72,7 @@ class JvmtiClass private constructor(val clazz: Class<*>) {
 
     fun bySig(signature: String, classLoader: ClassLoader? = null): JvmtiClass {
       when (signature) {
+        "Z" -> return JvmtiClass[Boolean::class.java]
         "I" -> return JvmtiClass[Int::class.java]
         "J" -> return JvmtiClass[Long::class.java]
       }

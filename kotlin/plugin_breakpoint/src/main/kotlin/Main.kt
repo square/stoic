@@ -112,7 +112,7 @@ fun main(args: Array<String>) {
   }
 
   for (bpSpec in bpSpecs) {
-    jvmti.syncBreakpoint(bpSpec.method.startLocation) { entryFrame ->
+    jvmti.breakpoint(bpSpec.method.startLocation) { entryFrame ->
       val values = mutableListOf<String>()
       for (printSpec in bpSpec.printSpecs.filter { it.evalTime == ON_ENTRY }) {
         val str = entryFrame.get(printSpec.localVariable!!).toString()

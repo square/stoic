@@ -66,7 +66,7 @@ Each plugin is a normal Java `main` function. You access debugger functionality 
 ```
 // get callbacks whenever any method of interest is called
 val method = jvmti.virtualMachine.methodBySig("android/view/InputEventReceiver.dispatchInputEvent(ILandroid/view/InputEvent;)V")
-jvmti.syncBreakpoint(method.startLocation) { frame ->
+jvmti.breakpoint(method.startLocation) { frame ->
   println("dispatchInputEvent called")
 }
 

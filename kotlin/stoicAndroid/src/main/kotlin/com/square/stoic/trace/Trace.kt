@@ -61,6 +61,25 @@ fun rules(vararg pairs: Pair<String?, Rule?>): Rule {
   return rules(null, *pairs)
 }
 
+fun stringifyUntyped(evaluator: ValueEvaluator): RuleLeaf {
+  return RuleLeaf { evaluator }
+}
+
+fun <T> stringify(clazz: Class<T>, stringifier: (T) -> String): RuleLeaf {
+  return RuleLeaf { type ->
+    val jvmtiClass = type as JvmtiClass
+    if (!clazz.isAssignableFrom(jvmtiClass.clazz)) {
+      throw IllegalArgumentException("${jvmtiClass.simpleName} is not compatible with $clazz")
+    }
+
+    object: ValueEvaluator() {
+      override fun apply(obj: Any?): ResultTree {
+        return ResultLeaf(stringifier(obj as T))
+      }
+    }
+  }
+}
+
 sealed class Rule {
   class RuleMap(private val default: Rule?, private val rules: List<Pair<String?, Rule?>>): Rule() {
     /**
@@ -288,8 +307,9 @@ fun resolveMethodMap(
       // We need an evaluator for each argument
       when (rule) {
         is RuleMap -> {
+          // TODO: match locals by index, since name can change between super/subclass impl
           val localVarPairs = rule.gather(
-            jvmtiMethod.arguments.groupBy { it.name },
+            subclassMethod.arguments.groupBy { it.name },
             null
           ).mapNotNull { (_, localVar, subrule) ->
             val subtype = JvmtiClass.bySig(localVar.signature)
@@ -371,9 +391,13 @@ fun trace(vararg rules: Pair<String, Rule>, consume: (String, ResultTree) -> Uni
   resolvedRules.forEach { methodEvaluator ->
     val jvmtiMethod = methodEvaluator.method
     val startLocation = jvmtiMethod.startLocation
-    jvmti.syncBreakpoint(startLocation) { frame ->
-      val resultTree = methodEvaluator.apply(frame)
-      consume(jvmtiMethod.simpleQualifiedName, resultTree)
+
+    // Check location to make sure the method isn't abstract
+    if (startLocation.jlocation >= 0) {
+      jvmti.breakpoint(startLocation) { frame ->
+        val resultTree = methodEvaluator.apply(frame)
+        consume(jvmtiMethod.simpleQualifiedName, resultTree)
+      }
     }
   }
 }
@@ -429,7 +453,7 @@ fun resultTreeToString(name: String?, tree: ResultTree, indent: String, sb: Stri
 //    clazz.declaredMethods.forEach { jvmtiMethod ->
 //      val stringifier = classSpec[jvmtiMethod.name] ?: StringifyDefault
 //      if (stringifier != StringifyOmit && jvmtiMethod.startLocation.jlocation >= 0) {
-//        jvmti.syncBreakpoint(jvmtiMethod.startLocation) {
+//        jvmti.breakpoint(jvmtiMethod.startLocation) {
 //          val earlyStr = stringifier.stringify(FrameMembers(jvmtiMethod, it), "")
 //          if (earlyStr == "") {
 //            // do nothing
@@ -566,7 +590,7 @@ fun identityString(obj: Any?): String {
 }
 
 fun traceMethodUntilExit(bpMethod: JvmtiMethod) {
-  jvmti.syncBreakpoint(bpMethod.startLocation) { breakpointFrame ->
+  jvmti.breakpoint(bpMethod.startLocation) { breakpointFrame ->
     traceUntilExit(breakpointFrame)
   }
 }

@@ -102,15 +102,17 @@ class StoicPlugin(private val stoicDir: String, private val socket: LocalSocket)
           0
         } catch (e: InvocationTargetException) {
           Log.e("stoic", "plugin crashed", e)
-          e.targetException.printStackTrace(stderr)
-          1
+          val targetException = e.targetException
+          if (targetException !is ExitCodeException) {
+            targetException.printStackTrace(stderr)
+            1
+          } else {
+            targetException.code
+          }
         } catch (e: ReflectiveOperationException) {
           Log.e("stoic", "problem starting plugin", e)
           e.printStackTrace(stderr)
           1
-        } catch (e: ExitCodeException) {
-          Log.d("stoic", "plugin threw exit code exception", e)
-          e.code
         } finally {
           // Restore previous classloader
           Thread.currentThread().contextClassLoader = oldClassLoader

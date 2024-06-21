@@ -36,7 +36,7 @@ class StoicJvmti private constructor() {
     return VirtualMachine.nativeSubclasses(clazz)
   }
 
-  fun syncBreakpoint(location: Location, onBreakpoint: OnBreakpoint): BreakpointRequest {
+  fun breakpoint(location: Location, onBreakpoint: OnBreakpoint): BreakpointRequest {
     val pluginStoic = stoic
     return VirtualMachine.eventRequestManager.createBreakpointRequest(location) { frame ->
       pluginStoic.callWith {
