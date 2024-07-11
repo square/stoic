@@ -2,7 +2,9 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import com.square.stoic.helpers.*
+import com.square.stoic.threadlocals.stoic
 import java.util.concurrent.CountDownLatch
+
 
 /**
  * A Stoic plugin to inject errors into a running process
@@ -34,7 +36,7 @@ fun usage(exitCode: Int) {
  */
 fun injectBackgroundThreadError() {
   HandlerThread("injected-error").also {
-    stoic.runOnLooper(it.looper, Integer.MAX_VALUE) {
+    stoic.runOnLooper(it.looper, Long.MAX_VALUE) {
       eprintln("Injecting background thread error...")
       throw Exception("This is a background thread error.")
     }
