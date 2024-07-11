@@ -1076,7 +1076,7 @@ static jint AgentStart(JavaVM* vm, char* options, [[maybe_unused]] void* reserve
     .can_generate_breakpoint_events = JNI_TRUE,
     .can_generate_method_entry_events = JNI_TRUE,
     .can_generate_method_exit_events = JNI_TRUE,
-    .can_force_early_return = JNI_TRUE,
+    //.can_force_early_return = JNI_TRUE,
   };
   CHECK_JVMTI(jvmti->AddCapabilities(&caps) != JVMTI_ERROR_NONE);
 
