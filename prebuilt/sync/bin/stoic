@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/system/bin/sh
 
 # This is the version of stoic that runs on the device
 

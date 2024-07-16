@@ -1072,10 +1072,12 @@ static jint AgentStart(JavaVM* vm, char* options, [[maybe_unused]] void* reserve
 
   jvmtiCapabilities caps = {
     .can_tag_objects = JNI_TRUE,
-    .can_access_local_variables = JNI_TRUE,
+    // Not available on older versions of Android
+    //.can_access_local_variables = JNI_TRUE,
     .can_generate_breakpoint_events = JNI_TRUE,
-    .can_generate_method_entry_events = JNI_TRUE,
-    .can_generate_method_exit_events = JNI_TRUE,
+    // Not available on older versions of Android
+    //.can_generate_method_entry_events = JNI_TRUE,
+    //.can_generate_method_exit_events = JNI_TRUE,
     //.can_force_early_return = JNI_TRUE,
   };
   CHECK_JVMTI(jvmti->AddCapabilities(&caps) != JVMTI_ERROR_NONE);

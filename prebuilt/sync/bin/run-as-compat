@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/system/bin/sh
 
 # This is a script that we run on Android to address a shortcoming in run-as -
 # it doesn't work for non-debuggable packages even when you are root

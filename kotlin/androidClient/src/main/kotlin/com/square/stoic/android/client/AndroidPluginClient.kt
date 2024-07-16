@@ -245,7 +245,9 @@ class AndroidPluginClient(args: PluginParsedArgs) : PluginClient(args) {
     )
     logDebug { "attach options: $options" }
 
-    val optionsJsonStagingPath = runCommand(listOf("mktemp"))
+    // We have to specify a template argument to mktemp to avoid errors on some
+    // older versions of Android.
+    val optionsJsonStagingPath = runCommand(listOf("mktemp", "/data/local/tmp/XXXXXXXX"))
     logDebug { "optionsJsonHostPath: $optionsJsonStagingPath" }
     File(optionsJsonStagingPath).writeText(Json.encodeToString(options))
     val optionsJsonPkgPath = optionsJsonFromStoicDir(pkgStoicDir)
