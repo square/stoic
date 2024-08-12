@@ -30,7 +30,7 @@ class AndroidPluginRunner(mainParsedArgs: MainParsedArgs) : PluginRunner(mainPar
           """.trimMargin()
         }
       }
-      return 1
+      throw e
     }
   }
 
