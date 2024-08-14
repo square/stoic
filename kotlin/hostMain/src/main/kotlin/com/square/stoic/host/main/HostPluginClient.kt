@@ -59,6 +59,7 @@ class HostPluginClient(args: PluginParsedArgs) : PluginClient(args) {
           .inheritIO()
           .directory(File(stoicHostUsrPluginSrcDir))
           .waitFor(0)
+        adbShellShell("mkdir -p $stoicDeviceDevJarDir")
         arsync("$stoicHostUsrPluginSrcDir/$pluginModule/build/libs/$pluginDexJar", "adb:$stoicDeviceDevJarDir/$pluginDexJar")
 
         return "$stoicDeviceDevJarDir/$pluginDexJar"
