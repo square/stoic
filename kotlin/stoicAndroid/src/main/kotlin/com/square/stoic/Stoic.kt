@@ -146,7 +146,7 @@ class Stoic(
    * stoic thread-local, and reporting uncaught exceptions to stderr.
    *
    * They also provide an optional timeoutMs that can be used to wait for the asynchronous operation
-   * to complete.
+   * to complete. If timeoutMs is provided then any Throwable will be caught and printed to stderr.
    *
    * TODO: Run-delayed and Future variants
    *

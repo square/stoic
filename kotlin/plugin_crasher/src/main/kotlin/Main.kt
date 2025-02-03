@@ -19,14 +19,22 @@ fun main(args: Array<String>) {
   when (args[0]) {
     "anr" -> injectAnr()
     "art-oom" -> injectArtOom()
+    "error" -> injectMainThreadError()
     "background-error" -> injectBackgroundThreadError()
     else -> usage(1)
   }
 }
 
 fun usage(exitCode: Int) {
-  eprintln("stoic crasher [anr|art-oom|background-error]")
+  eprintln("stoic crasher [anr|art-oom|error|background-error]")
   exit(exitCode)
+}
+
+fun injectMainThreadError() {
+  stoic.runOnLooper(Looper.getMainLooper(), null) {
+    eprintln("Injecting main thread error...")
+    throw Exception("This is a main thread error.")
+  }
 }
 
 /**
@@ -36,7 +44,8 @@ fun usage(exitCode: Int) {
  */
 fun injectBackgroundThreadError() {
   HandlerThread("injected-error").also {
-    stoic.runOnLooper(it.looper, Long.MAX_VALUE) {
+    it.start()
+    stoic.runOnLooper(it.looper, null) {
       eprintln("Injecting background thread error...")
       throw Exception("This is a background thread error.")
     }

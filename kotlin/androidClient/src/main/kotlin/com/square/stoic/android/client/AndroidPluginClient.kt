@@ -92,11 +92,17 @@ class AndroidPluginClient(args: PluginParsedArgs) : PluginClient(args) {
     }
   }
 
-  private fun startPkg(pkg: String) {
+  private fun monkey(pkg: String) {
+    // We specify `--pct-syskeys 0` to work on emulators without physical keys
+    // See https://stackoverflow.com/a/46935037 for details
     runCommand(
-      listOf("monkey", "-p", pkg, "1"),
+      listOf("monkey", "--pct-syskeys", "0", "-p", pkg, "1"),
       redirectOutputAndError = Redirect.to(File("/dev/null"))
     )
+  }
+
+  private fun startPkg(pkg: String) {
+    monkey(pkg)
 
     // Wait for the process to start
     var i = 0
@@ -115,9 +121,7 @@ class AndroidPluginClient(args: PluginParsedArgs) : PluginClient(args) {
           throw Exception("Failed to start within 5s", e)
         } else if (i % 100 == 0) {
           logWarn { "$pkg is slow to start (maybe it's stuck) - retrying monkey" }
-          runCommand(
-            listOf("monkey", "-p", pkg, "1"), redirectOutputAndError = Redirect.to(File("/dev/null"))
-          )
+          monkey(pkg)
         }
 
         Thread.sleep(10)
