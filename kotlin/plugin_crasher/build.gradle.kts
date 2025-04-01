@@ -14,7 +14,7 @@ dependencies {
     if (androidHome == null) {
         throw GradleException("ANDROID_HOME environment variable is not set.")
     }
-    compileOnly(files("$androidHome/platforms/android-34/android.jar"))
+    compileOnly(files("$androidHome/platforms/android-35/android.jar"))
 
     implementation(kotlin("stdlib"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

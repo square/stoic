@@ -19,7 +19,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation(project(":common"))
 
-    compileOnly(files("$androidHome/platforms/android-34/android.jar"))
+    compileOnly(files("$androidHome/platforms/android-35/android.jar"))
 }
 
 tasks.withType<KotlinCompile> {

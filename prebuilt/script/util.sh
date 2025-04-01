@@ -4,8 +4,8 @@
 # These are used by scripts that source this one
 # shellcheck disable=SC2034
 stoic_version=0.0.1
-stoic_target_api_level=34
-stoic_build_tools_version=34.0.0
+stoic_target_api_level=35
+stoic_build_tools_version=35.0.1
 stoic_ndk_version=26.3.11579264
 
 if [ -z "${ANDROID_HOME:-}" ]; then

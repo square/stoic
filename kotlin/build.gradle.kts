@@ -39,7 +39,7 @@ subprojects {
             val sourcePath = jarTask.archiveFile.get().asFile.getAbsolutePath()
             val dexJar = sourcePath.replace(".jar$".toRegex(), ".dex.jar")
             extensions.add("dexJar", dexJar)
-            commandLine("$androidHome/build-tools/34.0.0/d8", "--min-api", "26", "--output", dexJar, sourcePath)
+            commandLine("$androidHome/build-tools/35.0.1/d8", "--min-api", "26", "--output", dexJar, sourcePath)
         }
 
         val copyDexJar by tasks.registering {

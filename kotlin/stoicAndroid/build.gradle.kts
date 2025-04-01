@@ -13,7 +13,7 @@ val androidHome: String? = System.getenv("ANDROID_HOME")
 dependencies {
     implementation(kotlin("stdlib"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    compileOnly(files("$androidHome/platforms/android-34/android.jar"))
+    compileOnly(files("$androidHome/platforms/android-35/android.jar"))
 }
 
 tasks.withType<KotlinCompile> {
