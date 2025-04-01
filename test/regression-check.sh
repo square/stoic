@@ -13,7 +13,9 @@ rm -r "$script_dir/../out"
 "$script_dir"/test-shell.sh
 "$script_dir"/test-example-apk.sh
 
-"$script_dir/../out/rel/bin/stoic" testsuite
+# TODO: these tests require functionality not available on older versions of
+#   Android
+# "$script_dir/../out/rel/bin/stoic" testsuite
 
 # TODO
 #"$script_dir"/test-shebang.sh
