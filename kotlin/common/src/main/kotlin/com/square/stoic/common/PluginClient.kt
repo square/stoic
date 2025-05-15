@@ -153,7 +153,7 @@ abstract class PluginClient(
     // time we run the same plugin again)
 
     // We can use relative paths because run-as-compat always starts in the pkg's home dir
-    val pkgStoicRelativePluginDir = npsConnDir(".", serverConnectResponse.connId)
+    val pkgStoicRelativePluginDir = connDir(".", serverConnectResponse.connId)
 
     // preserve the plugin dex jar name
     val pkgStoicRelativePluginDexJar = "$pkgStoicRelativePluginDir/$pluginModule.dex.jar"
@@ -252,4 +252,8 @@ abstract class PluginClient(
   }
 
   abstract fun slowPath(): Int
+}
+
+fun connDir(baseDir: String, connId: Int): String {
+  return String.format("$baseDir/conn/%08x", connId)
 }
