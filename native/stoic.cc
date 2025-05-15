@@ -982,36 +982,36 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
 
 
   //
-  // Call AndroidServerKt.main to start the Android server
+  // Call AndroidServerJarKt.main to start the Android server
   //
 
   ScopedLocalRef<jstring> androidServerMainClassName(jni, jni->NewStringUTF(
-      "com.square.stoic.android.server.AndroidPluginServerKt"));
+      "com.square.stoic.android.server.AndroidServerJarKt"));
   CHECK(androidServerMainClassName.get() != nullptr);
 
-  ScopedLocalRef<jclass> klass_AndroidPluginServerKt(jni, (jclass) jni->CallObjectMethod(
+  ScopedLocalRef<jclass> klass_AndroidServerJarKt(jni, (jclass) jni->CallObjectMethod(
       dexClassLoader.get(),
       method_ClassLoader_loadClass,
       androidServerMainClassName.get()));
-  CHECK(klass_AndroidPluginServerKt.get() != nullptr);
-  LOG(DEBUG) << "Found AndroidPluginServerKt class";
+  CHECK(klass_AndroidServerJarKt.get() != nullptr);
+  LOG(DEBUG) << "Found AndroidServerJarKt class";
 
   ScopedLocalRef<jclass> klass_Method(jni, jni->FindClass("java/lang/reflect/Method"));
   CHECK(klass_Method.get() != nullptr);
   LOG(DEBUG) << "Found Method";
 
-  jmethodID method_AndroidPluginServerKt_main = jni->GetStaticMethodID(
-      klass_AndroidPluginServerKt.get(),
+  jmethodID method_AndroidServerJarKt_main = jni->GetStaticMethodID(
+      klass_AndroidServerJarKt.get(),
       "main",
       "(Ljava/lang/String;)V");
-  CHECK(method_AndroidPluginServerKt_main != nullptr);
-  LOG(DEBUG) << "Found AndroidServerKt.main method";
+  CHECK(method_AndroidServerJarKt_main != nullptr);
+  LOG(DEBUG) << "Found AndroidServerJarKt.main method";
 
   ScopedLocalRef<jstring> stoicDirString(jni, jni->NewStringUTF(stoicDir.c_str()));
   CHECK(stoicDirString != nullptr);
   LOG(DEBUG) << "Constructed stoicDirString";
 
-  jni->CallStaticVoidMethod(klass_AndroidPluginServerKt.get(), method_AndroidPluginServerKt_main, stoicDirString.get());
+  jni->CallStaticVoidMethod(klass_AndroidServerJarKt.get(), method_AndroidServerJarKt_main, stoicDirString.get());
 
 
   //

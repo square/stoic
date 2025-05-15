@@ -5,42 +5,37 @@ import android.net.LocalSocket
 import android.net.LocalSocketAddress
 import android.util.Log
 import com.square.stoic.StoicJvmti
+import com.square.stoic.common.JvmtiAttachOptions
 import com.square.stoic.common.LogLevel
+import com.square.stoic.common.STOIC_PROTOCOL_VERSION
 import com.square.stoic.common.minLogLevel
+import com.square.stoic.common.optionsJsonFromStoicDir
 import com.square.stoic.common.serverSocketName
 import com.square.stoic.common.waitSocketName
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.nio.charset.StandardCharsets.UTF_8
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
-@Suppress("unused")
-fun main(stoicDir: String) {
-  Log.i("stoic", "start of ServerKt.main")
+val serverRunning = AtomicBoolean(false)
+fun ensureServer(stoicDir: String) {
+  if (serverRunning.compareAndSet(false, true)) {
+    startServer(stoicDir)
+  }
+}
 
-  // RegisterNatives happened before we were called, so we mark Jvmti as ready to use
-  StoicJvmti.markInitialized()
-
-  minLogLevel = LogLevel.DEBUG
-
-  //var pidFile: String? = null
+private fun startServer(stoicDir: String) {
   try {
     Log.d("stoic", "stoicDir: $stoicDir")
-  //val options = Json.decodeFromString(
-  //  JvmtiAttachOptions.serializer(),
-  //  File(optionsJsonFromStoicDir(stoicDir)).readText(UTF_8)
-  //)
-  //Log.d("stoic", "options: $options")
-  //if (options.stoicVersion != STOIC_VERSION) {
-  //  throw Exception("Mismatched versions: ${options.stoicVersion} and $STOIC_VERSION")
-  //}
-
-    // We write a pid file to let the client know that this specific process is now hosting a Stoic
-    // server.
-  //val pid = android.os.Process.myPid()
-  //Log.d("stoic", "writing pid: $pid")
-  //pidFile = "${stoicDir}/pid"
-  //File(pidFile).writeText(pid.toString(), UTF_8)
-  //Log.d("stoic", "pid written")
+    val options = Json.decodeFromString(
+      JvmtiAttachOptions.serializer(),
+      File(optionsJsonFromStoicDir(stoicDir)).readText(UTF_8)
+    )
+    Log.d("stoic", "options: $options")
+    if (options.stoicVersion != STOIC_PROTOCOL_VERSION) {
+      throw Exception("Mismatched versions: ${options.stoicVersion} and $STOIC_PROTOCOL_VERSION")
+    }
 
     // TODO: fix hack - get the pkg from something other than the dir
     val pkg = File(stoicDir).parentFile!!.name
@@ -52,7 +47,7 @@ fun main(stoicDir: String) {
     Log.d("stoic", "localSocketAddress: ($name, $namespace)")
 
     thread(name = "stoic-server") {
-      Log.d("stoic", "Letting the client that we're up by connecting to the wait socket")
+      Log.d("stoic", "Letting the client know that we're up by connecting to the wait socket")
       try {
         LocalSocket().also {
           it.connect(LocalSocketAddress(waitSocketName(pkg)))
@@ -73,7 +68,22 @@ fun main(stoicDir: String) {
 
     while (true) {
       val socket = server.accept()
-      StoicPlugin(stoicDir, socket).startThread(nextPluginId++)
+      thread (name = "stoic-plugin") {
+        try {
+          StoicPlugin(stoicDir, mapOf(), socket.inputStream, socket.outputStream).pluginMain(nextPluginId++)
+        } catch (e: Throwable) {
+          Log.e("stoic", "unexpected", e)
+
+          // We only close the socket in the event of an exception. Otherwise we want to give
+          // the buffering thread(s) a chance to complete their transfers
+          socket.close()
+
+          // Bring down the process for non-Exception Throwables
+          if (e !is Exception) {
+            throw e
+          }
+        }
+      }
     }
   } catch (e: Throwable) {
     Log.e("stoic", "unexpected", e)

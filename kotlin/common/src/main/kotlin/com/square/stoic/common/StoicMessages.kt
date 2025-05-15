@@ -1,11 +1,5 @@
 package com.square.stoic.common
 
-import com.square.stoic.common.MessageType.PLUGIN_FINISHED
-import com.square.stoic.common.MessageType.SERVER_CONNECT_RESPONSE
-import com.square.stoic.common.MessageType.START_PLUGIN
-import com.square.stoic.common.MessageType.STREAM_CLOSED
-import com.square.stoic.common.MessageType.STREAM_IO
-
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -13,7 +7,7 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.nio.charset.StandardCharsets
 
-const val STOIC_VERSION = 1
+const val STOIC_PROTOCOL_VERSION = 2
 const val STDIN = 0
 const val STDOUT = 1
 const val STDERR = 2
@@ -24,29 +18,47 @@ data class JvmtiAttachOptions(
   val stoicVersion: Int,
 )
 
-// Sent back to the client when it first establishes connection
-@Serializable
-data class ServerConnectResponse(
-  val stoicVersion: Int,
-  val connId: Int,
-)
-
 enum class MessageType(val code: Int) {
-  START_PLUGIN(1),
-  STREAM_CLOSED(2),
-  STREAM_IO(3),
-  SERVER_CONNECT_RESPONSE(4),
-  PLUGIN_FINISHED(5),
+  STREAM_IO(1),
+  VERIFY_PROTOCOL_VERSION(2),
+  START_PLUGIN(3),
+  LOAD_PLUGIN(5),
+  PLUGIN_FINISHED(6),
+  STREAM_CLOSED(7),
+  SUCCEEDED(8),
+  FAILED(9),
+  PROTOCOL_ERROR(10),
 }
 
-// Sent over the control plane (host -> android) to instruct the android server
-// to start a new plugin
+enum class FailureCode(val value: Int) {
+  UNSPECIFIED(0),
+  PLUGIN_MISSING(1),
+}
+
+@Serializable
+data class VerifyProtocolVersion(
+  val protocolVersion: Int
+)
+
 @Serializable
 data class StartPlugin(
-  val pluginJar: String,
+  val pluginName: String?,
+  val pluginSha: String?,
   val pluginArgs: List<String>,
   val minLogLevel: String,
-  val env: Map<String, String>,
+  val env: Map<String, String>
+)
+
+@Serializable
+data class LoadPlugin(
+  val pluginName: String?,
+  val pluginSha: String,
+  val pseudoFd: Int,
+)
+
+@Serializable
+data class PluginFinished(
+  val exitCode: Int,
 )
 
 // Sent over the stdin/stdout/stderr streams - not line-buffered
@@ -59,19 +71,59 @@ class StreamIO(val id: Int, val buffer: ByteArray)
 data class StreamClosed(val id: Int)
 
 @Serializable
-data class PluginFinished(val exitCode: Int)
+data class Succeeded(val message: String)
+
+@Serializable
+data class Failed(val failureCode: Int, val message: String)
+
+@Serializable
+data class ProtocolError(val message: String)
 
 
 class MessageWriter(val dataOutputStream : DataOutputStream) {
+  val pseudoFdsOpenForWriting = mutableSetOf<Int>()
+  var nextAvailablePseudoFd = 3
+
+  fun openStdinForWriting() {
+    pseudoFdsOpenForWriting.add(STDIN)
+  }
+
+  fun openStdoutForWriting() {
+    pseudoFdsOpenForWriting.add(STDOUT)
+  }
+
+  fun openStderrForWriting() {
+    pseudoFdsOpenForWriting.add(STDERR)
+  }
+
+  fun openPseudoFdForWriting(): Int {
+    val pseudoFd = nextAvailablePseudoFd++
+    pseudoFdsOpenForWriting.add(pseudoFd)
+    return pseudoFd
+  }
+
+  fun closePseudoFdForWriting(pseudoFd: Int) {
+    if (pseudoFd !in pseudoFdsOpenForWriting) {
+      throw IllegalArgumentException("Unrecognized pseudo-fd - already closed?")
+    }
+
+    pseudoFdsOpenForWriting.remove(pseudoFd)
+    writeMessage(StreamClosed(pseudoFd))
+  }
+
   @Synchronized
   fun writeMessage(msg: Any) {
     logVerbose { "writing: $msg" }
     val msgType = when (msg) {
-      is StreamIO -> STREAM_IO
-      is StartPlugin -> START_PLUGIN
-      is StreamClosed -> STREAM_CLOSED
-      is ServerConnectResponse -> SERVER_CONNECT_RESPONSE
-      is PluginFinished -> PLUGIN_FINISHED
+      is VerifyProtocolVersion -> MessageType.VERIFY_PROTOCOL_VERSION
+      is StartPlugin -> MessageType.START_PLUGIN
+      is LoadPlugin -> MessageType.LOAD_PLUGIN
+      is PluginFinished -> MessageType.PLUGIN_FINISHED
+      is StreamIO -> MessageType.STREAM_IO
+      is StreamClosed -> MessageType.STREAM_CLOSED
+      is Succeeded -> MessageType.SUCCEEDED
+      is Failed -> MessageType.FAILED
+      is ProtocolError -> MessageType.PROTOCOL_ERROR
       else -> throw IllegalArgumentException()
     }
 
@@ -83,10 +135,14 @@ class MessageWriter(val dataOutputStream : DataOutputStream) {
       dataOutputStream.write(msg.buffer)
     } else {
       val json = when (msg) {
+        is VerifyProtocolVersion -> Json.encodeToString(msg)
         is StartPlugin -> Json.encodeToString(msg)
-        is StreamClosed -> Json.encodeToString(msg)
-        is ServerConnectResponse -> Json.encodeToString(msg)
+        is LoadPlugin -> Json.encodeToString(msg)
         is PluginFinished -> Json.encodeToString(msg)
+        is StreamClosed -> Json.encodeToString(msg)
+        is Succeeded -> Json.encodeToString(msg)
+        is Failed -> Json.encodeToString(msg)
+        is ProtocolError -> Json.encodeToString(msg)
         else -> throw IllegalArgumentException("Unexpected msg: $msg")
       }
       val bytes = json.toByteArray(StandardCharsets.UTF_8)
@@ -106,18 +162,23 @@ class MessageReader(val dataInputStream: DataInputStream) {
     logVerbose { "readNext: attempting to read msgType" }
     val msgType = dataInputStream.readInt()
     logVerbose { "readNext: read $msgType" }
-    val msg: Any = if (msgType == STREAM_IO.code) {
+    val msg: Any = if (msgType == MessageType.STREAM_IO.code) {
       val id = dataInputStream.readInt()
       val size = dataInputStream.readInt()
       StreamIO(id, ByteArray(size).also { dataInputStream.readFully(it) })
     } else {
       val size = dataInputStream.readInt()
-      val json = ByteArray(size).also { dataInputStream.readFully(it) }.toString(StandardCharsets.UTF_8)
+      val json = String(ByteArray(size).also { dataInputStream.readFully(it) })
+      logVerbose { "json: $json" }
       when (msgType) {
-        START_PLUGIN.code -> Json.decodeFromString<StartPlugin>(json)
-        STREAM_CLOSED.code -> Json.decodeFromString<StreamClosed>(json)
-        SERVER_CONNECT_RESPONSE.code -> Json.decodeFromString<ServerConnectResponse>(json)
-        PLUGIN_FINISHED.code -> Json.decodeFromString<PluginFinished>(json)
+        MessageType.VERIFY_PROTOCOL_VERSION.code -> Json.decodeFromString<VerifyProtocolVersion>(json)
+        MessageType.START_PLUGIN.code -> Json.decodeFromString<StartPlugin>(json)
+        MessageType.LOAD_PLUGIN.code -> Json.decodeFromString<LoadPlugin>(json)
+        MessageType.PLUGIN_FINISHED.code -> Json.decodeFromString<PluginFinished>(json)
+        MessageType.STREAM_CLOSED.code -> Json.decodeFromString<StreamClosed>(json)
+        MessageType.SUCCEEDED.code -> Json.decodeFromString<Succeeded>(json)
+        MessageType.FAILED.code -> Json.decodeFromString<Failed>(json)
+        MessageType.PROTOCOL_ERROR.code -> Json.decodeFromString<ProtocolError>(json)
         else -> throw IllegalStateException("msgType: $msgType")
       }
     }

@@ -1,8 +1,8 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.9.24"
-    kotlin("plugin.serialization") version "1.9.24"  // Serialization plugin
+    kotlin("jvm")
+    kotlin("plugin.serialization")  // Serialization plugin
 }
 
 val androidHome: String? = System.getenv("ANDROID_HOME")

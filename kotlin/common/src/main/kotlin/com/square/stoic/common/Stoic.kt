@@ -18,6 +18,10 @@ enum class LogLevel(val level: Int) {
   fun meetsMinimumLevel(minimumLevel: LogLevel): Boolean {
     return this.level >= minimumLevel.level
   }
+
+  fun isLoggable(): Boolean {
+    return this >= minLogLevel
+  }
 }
 
 fun log(level: LogLevel, msg: () -> String) {

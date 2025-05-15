@@ -1,0 +1,15 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+  <!-- Base application theme. -->
+  <style name="Theme.Stoic" parent="Theme.AppCompat.Light.DarkActionBar">
+    <!-- Primary brand color. -->
+    <item name="colorPrimary">@color/purple_200</item>
+    <item name="colorPrimaryDark">@color/purple_700</item>
+    <item name="colorAccent">@color/teal_200</item>
+    <!-- Customize your theme here. -->
+  </style>
+
+  <style name="ThemeOverlay.Stoic.FullscreenContainer" parent="">
+    <item name="fullscreenBackgroundColor">@color/light_blue_900</item>
+    <item name="fullscreenTextColor">@color/light_blue_A400</item>
+  </style>
+</resources>

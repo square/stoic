@@ -62,11 +62,11 @@ cd "$stoic_kotlin_dir"
 
 # exampleapp is the debug app that's used by default. It needs to be debug so
 # that stoic can attach to it.
-./gradlew --parallel :hostMain:assemble :stoicAndroid:assemble :androidServer:dexJar :androidClient:dexJar :plugin_helloworld:dexJar :plugin_appexitinfo:dexJar :plugin_breakpoint:dexJar :plugin_crasher:dexJar :plugin_testsuite:dexJar :exampleapp:assembleDebug
+./gradlew --parallel :hostMain:assemble :stoicAndroid:assemble :androidServerJar:dexJar :androidClient:dexJar :plugin_helloworld:dexJar :plugin_appexitinfo:dexJar :plugin_breakpoint:dexJar :plugin_crasher:dexJar :plugin_testsuite:dexJar :exampleapp:assembleDebug
 cp hostMain/build/libs/hostMain.jar "$stoic_release_dir"/jar/
 cp stoicAndroid/build/libs/stoicAndroid.jar "$stoic_release_dir"/jar/
 cp stoicAndroid/build/libs/stoicAndroid-sources.jar "$stoic_release_dir"/jar/
-cp androidServer/build/libs/androidServer.dex.jar "$stoic_core_sync_dir/stoic/stoic.dex.jar"
+cp androidServerJar/build/libs/androidServerJar.dex.jar "$stoic_core_sync_dir/stoic/stoic.dex.jar"
 cp androidClient/build/libs/androidClient.dex.jar "$stoic_core_sync_dir/stoic/stoic-client.dex.jar"
 cp plugin_appexitinfo/build/libs/plugin_appexitinfo.dex.jar "$stoic_core_sync_dir/plugins/appexitinfo.dex.jar"
 cp plugin_breakpoint/build/libs/plugin_breakpoint.dex.jar "$stoic_core_sync_dir/plugins/breakpoint.dex.jar"

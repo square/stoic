@@ -30,16 +30,21 @@ verify_stderr() {
     shift
     >&2 echo verify_stderr "$@"
     output="$("$@" 3>&1 1>/dev/null 2>&3)"
+    return_code="$?"
     if [ "$output" != "$expected" ]; then
         echo "expected: '$expected'"
         echo "actual  : '$output'"
         abort "$lineno" Failed
+    elif [ "$return_code" != "0" ]; then
+      echo "Failed \"$@\" - returned $return_code"
     fi
 }
 
 cd "$script_dir"
 
-# Verify we can install/run the example app automatically
+# Verify we can install/run the example app automatically.
+# NOTE: When we don't specify a package, we default to the example app, and the
+# example app implies --start-if-needed
 if [ -n "$(adb shell pm list package com.square.stoic.example)" ]; then
     adb uninstall com.square.stoic.example
 fi

@@ -1,19 +1,11 @@
 package com.square.stoic.common
 
-import com.square.stoic.common.LogLevel.DEBUG
 import java.io.DataInputStream
 import java.io.DataOutputStream
-import java.io.EOFException
 import java.io.File
-import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
-import java.lang.ProcessBuilder.Redirect
-import java.nio.charset.StandardCharsets.UTF_8
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit.MILLISECONDS
-import java.net.ConnectException
-import kotlin.concurrent.thread
+import java.security.MessageDigest
 
 const val stoicDeviceDir = "/data/local/tmp/stoic"
 const val stoicDeviceSyncDir = "$stoicDeviceDir/sync"
@@ -23,237 +15,126 @@ const val shebangJarDir = "$stoicDeviceDir/shebang_jar"
 const val stoicExamplePkg = "com.square.stoic.example"
 const val runAsCompat = "$stoicDeviceSyncDir/bin/run-as-compat"
 
-// Base class for connecting to AndroidServer. Overridden by HostClient and AndroidClient.
-abstract class PluginClient(
-  val args: PluginParsedArgs
+class PluginClient(
+  val pluginDexJar: String?,
+  val pluginParsedArgs: PluginParsedArgs,
+  inputStream: InputStream,
+  outputStream: OutputStream
 ) {
-  fun run(): Int {
-    if (!args.restartApp) {
-      try {
-        return fastPath()
-      } catch (e: ConnectException) {
-        logInfo { "Plugin fast-path failed. Falling back to plugin slow-path." }
-        logDebug { e.stackTraceToString() }
+  val writer = MessageWriter(DataOutputStream(outputStream))
+  val reader = MessageReader(DataInputStream(inputStream))
+  var nextMessage: Any? = null
+
+  fun peekMessage(): Any {
+    if (nextMessage == null) {
+      nextMessage = reader.readNext()
+    }
+
+    return nextMessage!!
+  }
+
+  fun consumeMessage(): Any {
+    return peekMessage().also { nextMessage = null }
+  }
+
+  fun handleVersionResult() {
+    val succeeded = consumeMessage() as Succeeded
+    logDebug { succeeded.message }
+  }
+
+  fun handleStartPluginResult() {
+    val msg = consumeMessage()
+    when (msg) {
+      is Succeeded -> return // nothing more to do
+      is Failed -> {
+        when (msg.failureCode) {
+          FailureCode.PLUGIN_MISSING.value -> {} // fall through to load plugin
+          else -> throw IllegalStateException(msg.toString())
+        }
       }
+      else -> throw IllegalStateException("Unexpected message $msg")
     }
 
-    return slowPath()
-  }
-
-  private fun fastPath(): Int {
-    val pkg = args.pkg
-    val pkgSocat = "./stoic/socat"  // We start in home
-    val serverAddress = serverSocketName(pkg)
-    val pid = adbShellPb("pidof $pkg").stdout(expectedExitCode = null)
-    val pb = adbShellPb("$runAsCompat $pkg $pkgSocat - ABSTRACT-CONNECT:$serverAddress")
-
-    // If our log level is DEBUG (or VERBOSE) then we show stderr. Otherwise stderr will by default
-    // go to pipe and not be seen at all.
-    if (minLogLevel <= DEBUG) {
-      pb.redirectError(Redirect.INHERIT)
+    // Need to load plugin
+    if (pluginDexJar == null) {
+      throw PithyException("Plugin not found: ${pluginParsedArgs.pluginModule}")
     }
 
-    return attemptPlugin(pkg, pid, pb.start())
+    val loadPluginPseudoFd = writer.openPseudoFdForWriting()
+    val pluginBytes = File(pluginDexJar).readBytes()
+    val pluginSha = computeSha256(pluginBytes)
+    writer.writeMessage(
+        LoadPlugin(
+        pluginName = pluginParsedArgs.pluginModule,
+        pluginSha = pluginSha,
+        pseudoFd = loadPluginPseudoFd,
+      )
+    )
+    writer.writeMessage(
+      StreamIO(
+        id = loadPluginPseudoFd,
+        buffer = pluginBytes
+      )
+    )
+    writer.closePseudoFdForWriting(loadPluginPseudoFd)
+    writer.writeMessage(
+      StartPlugin(
+        pluginName = pluginParsedArgs.pluginModule,
+        pluginSha = pluginSha,
+        pluginArgs = pluginParsedArgs.pluginArgs,
+        minLogLevel = minLogLevel.name,
+        env = pluginParsedArgs.pluginEnvVars
+      )
+    )
+    val loadPluginResult = consumeMessage() as Succeeded
+    logVerbose { loadPluginResult.toString() }
+    val startPluginResult = consumeMessage() as Succeeded
+    logVerbose { startPluginResult.toString() }
   }
 
-  protected fun attemptPlugin(pkg: String, pid: String, process: Process): Int {
-    try {
-      val inputStream = process.inputStream
-      val outputStream = process.outputStream
-      // TODO: monitor errorStream
-      // We expect two classes of error messages:
-      // 1. If socat wasn't copied over yet:
-      //    run-as: exec failed for /data/user/0/com.square.stoic.example/stoic/socat: No such file or directory
-      // 2. If the server isn't running
-      //    2024/05/28 19:42:59 socat[17319] E connect(, AF=1 "\0/stoic/com.square.stoic.example/server", 42): Connection refused
-      // Those are fine - the remedy is to start the server
-      // Anything else we should logError for.
-
-      return runPlugin(pid, inputStream, outputStream)
-    } catch (e: Throwable) {
-      checkPid(pkg, pid)
-
-      if (e is EOFException) {
-        logDebug { "socat failed ${e.stackTraceToString()}" }
-        throw ConnectException("socat failed")
-      } else {
-        logError { "socat failed ${e.stackTraceToString()}" }
-        throw e
-      }
-    } finally {
-      process.destroyForcibly()
-    }
-  }
-
-  private fun checkPid(pkg: String, oldPid: String) {
-    val newPid = adbShellPb("pidof $pkg").stdout(expectedExitCode = null)
-    if (newPid != oldPid) {
-      logWarn { "pidof $pkg changed (old=$oldPid, new=$newPid) - check logcat to see why the process died" }
-    }
-  }
-
-  private fun runPlugin(pkgPid: String, inputStream: InputStream, outputStream: OutputStream): Int {
-    val pkg = args.pkg
-
-    val writer = MessageWriter(DataOutputStream(outputStream))
-    val reader = MessageReader(DataInputStream(inputStream))
+  fun handle(): Int {
     logDebug { "reader/writer constructed" }
 
-    val connectedLatch = CountDownLatch(1)
-    var serverConnectResponse: ServerConnectResponse
-    try {
-      thread {
-        // TODO: this code is Android-only - need to make it run on the host too.
-        try {
-          if (!connectedLatch.await(1000, MILLISECONDS)) {
-            // Maybe the process is in the background which can lead to hangs
-            // TODO: why? (doze mode / app standby / background execution limits / idle / battery / etc)?
-            // Seems to be related to "freezer". Here's a stack trace of our agent thread:
-            // $ su 0 cat stack
-            // [<0>] do_freezer_trap+0x50/0x8c
-            // [<0>] get_signal+0x4c4/0x8a8
-            // [<0>] do_notify_resume+0x134/0x340
-            // [<0>] el0_svc+0x68/0xc4
-            // [<0>] el0t_64_sync_handler+0x8c/0xfc
-            // [<0>] el0t_64_sync+0x1a0/0x1a4
-            val oomScoreAdj = adbShellPb("cat /proc/$pkgPid/oom_score_adj").stdout().trim().toInt()
-            if (oomScoreAdj != 0) {
-              logWarn {
-                """
-                  $pkg oom_score_adj is $oomScoreAdj which may have lead to a hang. Try foregrounding the app.
-                """.trimIndent()
-              }
-            } else if (!connectedLatch.await(5000, MILLISECONDS)) {
-              logWarn {
-                """
-                  $pkg appears to be hung. Try with --debug and/or --restart
-                """.trimIndent()
-              }
-            }
-          }
-        } catch (e: Throwable) {
-          logError { e.stackTraceToString() }
-        }
-      }
-
-      serverConnectResponse = reader.readNext() as ServerConnectResponse
-    } finally {
-      connectedLatch.countDown()
-    }
-
-    logDebug { "connect response: $serverConnectResponse" }
-    if (serverConnectResponse.stoicVersion != STOIC_VERSION) {
-      throw Exception("Mismatched stoic versions: ${serverConnectResponse.stoicVersion} and $STOIC_VERSION")
-    }
-
-    val pluginModule = args.pluginModule
-    val stagingPluginDexJar = resolveStagingPluginModule(pluginModule)
-
-    // TODO: Sync plugins to pkg dir as needed, and let the server open them (no need to recopy each
-    // time we run the same plugin again)
-
-    // We can use relative paths because run-as-compat always starts in the pkg's home dir
-    val pkgStoicRelativePluginDir = connDir(".", serverConnectResponse.connId)
-
-    // preserve the plugin dex jar name
-    val pkgStoicRelativePluginDexJar = "$pkgStoicRelativePluginDir/$pluginModule.dex.jar"
-
-    check(adbShellPb("""
-      $runAsCompat $pkg mkdir -p stoic/$pkgStoicRelativePluginDir
-      cat $stagingPluginDexJar | $runAsCompat $pkg sh -c 'cat > stoic/$pkgStoicRelativePluginDexJar'
-      $runAsCompat $pkg chmod 444 stoic/$pkgStoicRelativePluginDexJar
-    """.trimIndent()).inheritIO().start().waitFor() == 0)
-
-    val startPlugin = StartPlugin(
-      pluginJar = pkgStoicRelativePluginDexJar,
-      pluginArgs = args.pluginArgs,
-      minLogLevel = minLogLevel.name,
-      env = args.pluginEnvVars,
+    // Since we're a client, we will write to stdin (and read from stdout/stderr)
+    writer.openStdinForWriting()
+    writer.writeMessage(VerifyProtocolVersion(STOIC_PROTOCOL_VERSION))
+    writer.writeMessage(
+      StartPlugin(
+        pluginName = pluginParsedArgs.pluginModule,
+        pluginSha = pluginDexJar?.let { computeSha256(File(it).readBytes()) },
+        pluginArgs = pluginParsedArgs.pluginArgs,
+        minLogLevel = minLogLevel.name,
+        env = pluginParsedArgs.pluginEnvVars,
+      )
     )
-    logDebug { "startPlugin: $startPlugin" }
-    writer.writeMessage(startPlugin)
 
-    var exitCode = -1
-    val countDownLatch = CountDownLatch(1)
-
-    // process output from the plugin
-    val outPumpThread = thread(name = "out-pump") {
-      while (true) {
-        when (val msg = reader.readNext()) {
-          is PluginFinished -> {
-            logDebug { "received PluginFinished: $msg" }
-            exitCode = msg.exitCode
-            countDownLatch.countDown()
-            break
+    // To minimize roundtrips, we don't read the version result until after we've written RunPlugin
+    handleVersionResult()
+    handleStartPluginResult()
+    while (true) {
+      val msg = consumeMessage()
+      when (msg) {
+        is StreamIO -> {
+          when (msg.id) {
+            STDOUT -> System.out.write(msg.buffer)
+            STDERR -> System.err.write(msg.buffer)
+            else -> throw IllegalArgumentException("Unrecognized stream id: ${msg.id}")
           }
-          is StreamIO -> {
-            when (msg.id) {
-              STDOUT -> System.out.write(msg.buffer)
-              STDERR -> System.err.write(msg.buffer)
-              else -> throw IllegalStateException("Unexpected stream id: ${msg.id}")
-            }
-          }
-          else -> throw IllegalStateException("Unexpected message: $msg")
         }
+        is PluginFinished -> {
+          // To allow the server to stop pumping stdin cleanly, we write a StreamClosed message.
+          writer.writeMessage(StreamClosed(STDIN))
+          return msg.exitCode
+        }
+        else -> throw IllegalArgumentException("Unexpected msg: $msg")
       }
     }
-    outPumpThread.setUncaughtExceptionHandler { _, e ->
-      // TODO: dump logcat?
-      logError { e.stackTraceToString() }
-      exitCode = 1
-      countDownLatch.countDown()
-    }
-
-    val inPumpThread = thread (name = "in-pump") {
-      val buffer = ByteArray(1024)
-      while (true) {
-        val numRead = System.`in`.read(buffer)
-        val streamIO: Any = if (numRead < 0) {
-          StreamClosed(STDIN)
-        } else {
-          StreamIO(STDIN, ByteArray(numRead).also {
-            System.arraycopy(buffer, 0, it, 0, numRead)
-          })
-        }
-
-        try {
-          writer.writeMessage(streamIO)
-        } catch (e: IOException) {
-          // It's okay if the plugin ended when we were still trying to send input
-          logDebug { e.stackTraceToString() }
-        }
-      }
-    }
-    inPumpThread.setUncaughtExceptionHandler { _, e ->
-      // TODO: dump logcat?
-      logError { e.stackTraceToString() }
-      exitCode = 1
-      countDownLatch.countDown()
-      //exitProcess(1)
-    }
-
-    countDownLatch.await()
-    val actualExitCode = exitCode
-    // Trigger these to stop, if they haven't already
-    inPumpThread.interrupt()
-    outPumpThread.interrupt()
-
-    if (actualExitCode != 0) {
-      checkPid(pkg, pkgPid)
-    }
-
-    return actualExitCode
   }
-
-  abstract fun adbShellPb(cmd: String): ProcessBuilder
-
-  open fun resolveStagingPluginModule(pluginModule: String): String {
-    return "$stoicDeviceSyncPluginDir/$pluginModule.dex.jar"
-  }
-
-  abstract fun slowPath(): Int
 }
 
-fun connDir(baseDir: String, connId: Int): String {
-  return String.format("$baseDir/conn/%08x", connId)
+fun computeSha256(bytes: ByteArray): String {
+  val digest = MessageDigest.getInstance("SHA-256")
+  val hashBytes = digest.digest(bytes)
+  return hashBytes.joinToString("") { "%02x".format(it) }
 }
+

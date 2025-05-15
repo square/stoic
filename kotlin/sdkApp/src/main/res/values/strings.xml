@@ -1,0 +1,5 @@
+<resources>
+  <string name="app_name">ExampleApp</string>
+  <string name="example_button">Example Button</string>
+  <string name="example_content">Stoic</string>
+</resources>

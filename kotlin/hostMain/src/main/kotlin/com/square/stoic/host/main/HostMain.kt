@@ -4,15 +4,24 @@ import com.square.stoic.common.FailedExecException
 import com.square.stoic.common.LogLevel.WARN
 import com.square.stoic.common.MainParsedArgs
 import com.square.stoic.common.PithyException
+import com.square.stoic.common.PluginClient
+import com.square.stoic.common.PluginParsedArgs
+import com.square.stoic.common.LogLevel.DEBUG
+import com.square.stoic.common.logBlock
 import com.square.stoic.common.logDebug
 import com.square.stoic.common.logError
+import com.square.stoic.common.logVerbose
 import com.square.stoic.common.minLogLevel
 import com.square.stoic.common.runCommand
+import com.square.stoic.common.serverSocketName
 import com.square.stoic.common.stdout
+import com.square.stoic.common.stoicDeviceDevJarDir
+import com.square.stoic.common.stoicDeviceSyncPluginDir
 import com.square.stoic.common.waitFor
 import java.io.File
 
 import java.lang.ProcessBuilder.Redirect
+import java.net.Socket
 import java.util.Locale
 import kotlin.system.exitProcess
 
@@ -81,8 +90,51 @@ fun wrappedMain(rawArgs: Array<String>): Int {
     "exec" -> throw PithyException("TODO")
     "version" -> runVersion(mainParsedArgs.stoicArgs, mainParsedArgs.commandArgs)
     "setup" -> runSetup(mainParsedArgs.stoicArgs, mainParsedArgs.commandArgs)
-    else -> HostPluginRunner(mainParsedArgs).run()
+    else -> runPlugin(mainParsedArgs)
   }
+}
+
+fun runPlugin(mainParsedArgs: MainParsedArgs): Int {
+  val args = PluginParsedArgs.parse(mainParsedArgs)
+  val pluginJar = resolvePluginModule(args.pluginModule)
+
+  if (!args.restartApp) {
+    // `adb forward`-powered fast path
+    val serverSocketName = serverSocketName(args.pkg)
+    val portStr = ProcessBuilder(
+      "adb", "forward", "tcp:0", "localabstract:$serverSocketName"
+    ).stdout()
+    try {
+      Socket("localhost", portStr.toInt()).use {
+        val client = PluginClient(pluginJar, args, it.inputStream, it.outputStream)
+        return client.handle()
+      }
+    } catch (e: Exception) {
+      logDebug { "Failed host fast path: ${e.stackTraceToString()}"}
+      // Fall through to slow-path
+    } finally {
+      ProcessBuilder("adb", "forward", "--remove", portStr)
+    }
+  }
+
+  // slow-path
+  syncDevice()
+
+  // TODO: other stoic args
+  var stoicArgs = mutableListOf("--log", minLogLevel.level.toString(), "--pkg", args.pkg)
+  if (args.restartApp) {
+    stoicArgs += listOf("--restart")
+  }
+
+  // Or maybe we provide a `stoic exec` that will delegate to a shell script which will use printf
+  // to escape args correctly
+
+  return ProcessBuilder(
+    "adb",
+    "shell",
+    shellEscapeCmd(listOf("$stoicDeviceSyncDir/bin/stoic") + stoicArgs + listOf(args.pluginModule) + args.pluginArgs)
+  ).inheritIO().start().waitFor()
+
 }
 
 fun runSetup(stoicArgs: List<String>, commandArgs: List<String>): Int {
@@ -375,4 +427,36 @@ fun shellEscapeCmd(cmdArgs: List<String>): String {
   } else {
     return ProcessBuilder(listOf("bash", "-c", """ printf " %q" "$@" """, "stoic") + cmdArgs).stdout().drop(0)
   }
+}
+
+fun resolvePluginModule(pluginModule: String): String {
+  logDebug { "Attempting to resolve '$pluginModule'" }
+  val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginModule"
+  val pluginDexJar = "$pluginModule.dex.jar"
+  if (File(usrPluginSrcDir).exists()) {
+    logBlock(DEBUG, { "Building $usrPluginSrcDir/$pluginModule" }) {
+      // TODO: In the future, we should allow building a simple jar and stoic handles packaging it
+      // into a dex.jar, as needed
+      ProcessBuilder("./gradlew", "--quiet", ":$pluginModule:dexJar")
+        .inheritIO()
+        .directory(File(stoicHostUsrPluginSrcDir))
+        .waitFor(0)
+      ProcessBuilder("adb", "shell", "mkdir", "-p", stoicDeviceDevJarDir)
+
+      return "$stoicHostUsrPluginSrcDir/$pluginModule/build/libs/$pluginDexJar"
+    }
+  }
+
+  logDebug { "$usrPluginSrcDir does not exist - falling back to prebuilt locations." }
+
+  val usrPluginDexJar = File("$stoicHostUsrSyncDir/plugins/$pluginDexJar")
+  if (usrPluginDexJar.exists()) {
+    return usrPluginDexJar.canonicalPath
+  }
+  val corePluginDexJar = File("$stoicHostCoreSyncDir/plugins/$pluginDexJar")
+  if (corePluginDexJar.exists()) {
+    return corePluginDexJar.canonicalPath
+  }
+
+  throw PithyException("$pluginModule.dex.jar was not found within at either $usrPluginDexJar or $corePluginDexJar")
 }
