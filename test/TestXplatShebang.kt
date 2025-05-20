@@ -2,9 +2,9 @@
 package shebang
 
 import android.app.Application
-import com.square.stoic.print.*
-import com.square.stoic.isAndroid
-import com.square.stoic.jvmti
+import com.squareup.stoic.print.*
+import com.squareup.stoic.isAndroid
+import com.squareup.stoic.jvmti
 
 fun main(args: List<String>): Int {
   val pkg = if (isAndroid) {

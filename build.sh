@@ -60,20 +60,20 @@ export ANDROID_NDK="$ANDROID_HOME/ndk/$stoic_ndk_version"
 
 cd "$stoic_kotlin_dir"
 
-# exampleapp is the debug app that's used by default. It needs to be debug so
+# :demo-app:without-sdk is the debug app that's used by default. It needs to be debug so
 # that stoic can attach to it.
-./gradlew --parallel :hostMain:assemble :stoicAndroid:assemble :androidServerJar:dexJar :androidClient:dexJar :plugin_helloworld:dexJar :plugin_appexitinfo:dexJar :plugin_breakpoint:dexJar :plugin_crasher:dexJar :plugin_testsuite:dexJar :exampleapp:assembleDebug
-cp hostMain/build/libs/hostMain.jar "$stoic_release_dir"/jar/
-cp stoicAndroid/build/libs/stoicAndroid.jar "$stoic_release_dir"/jar/
-cp stoicAndroid/build/libs/stoicAndroid-sources.jar "$stoic_release_dir"/jar/
-cp androidServerJar/build/libs/androidServerJar.dex.jar "$stoic_core_sync_dir/stoic/stoic.dex.jar"
-cp androidClient/build/libs/androidClient.dex.jar "$stoic_core_sync_dir/stoic/stoic-client.dex.jar"
-cp plugin_appexitinfo/build/libs/plugin_appexitinfo.dex.jar "$stoic_core_sync_dir/plugins/appexitinfo.dex.jar"
-cp plugin_breakpoint/build/libs/plugin_breakpoint.dex.jar "$stoic_core_sync_dir/plugins/breakpoint.dex.jar"
-cp plugin_crasher/build/libs/plugin_crasher.dex.jar "$stoic_core_sync_dir/plugins/crasher.dex.jar"
-cp plugin_helloworld/build/libs/plugin_helloworld.dex.jar "$stoic_core_sync_dir/plugins/helloworld.dex.jar"
-cp plugin_testsuite/build/libs/plugin_testsuite.dex.jar "$stoic_core_sync_dir/plugins/testsuite.dex.jar"
-cp exampleapp/build/outputs/apk/debug/exampleapp-debug.apk "$stoic_core_sync_dir/apk/"
+./gradlew --parallel :host:main:assemble :android:plugin-sdk:assemble :android:server:injected:dexJar :android:main:dexJar :demo-plugin:helloworld:dexJar :demo-plugin:appexitinfo:dexJar :demo-plugin:breakpoint:dexJar :demo-plugin:crasher:dexJar :demo-plugin:testsuite:dexJar :demo-app:without-sdk:assembleDebug
+cp host/main/build/libs/main.jar "$stoic_release_dir"/jar/host-main.jar
+cp android/plugin-sdk/build/libs/plugin-sdk.jar "$stoic_release_dir"/jar/android-plugin-sdk.jar
+cp android/plugin-sdk/build/libs/plugin-sdk-sources.jar "$stoic_release_dir"/jar/android-plugin-sdk-sources.jar
+cp android/server/injected/build/libs/injected.dex.jar "$stoic_core_sync_dir/stoic/android-server-injected.dex.jar"
+cp android/main/build/libs/main.dex.jar "$stoic_core_sync_dir/stoic/android-main.dex.jar"
+cp demo-plugin/appexitinfo/build/libs/appexitinfo.dex.jar "$stoic_core_sync_dir/plugins/appexitinfo.dex.jar"
+cp demo-plugin/breakpoint/build/libs/breakpoint.dex.jar "$stoic_core_sync_dir/plugins/breakpoint.dex.jar"
+cp demo-plugin/crasher/build/libs/crasher.dex.jar "$stoic_core_sync_dir/plugins/crasher.dex.jar"
+cp demo-plugin/helloworld/build/libs/helloworld.dex.jar "$stoic_core_sync_dir/plugins/helloworld.dex.jar"
+cp demo-plugin/testsuite/build/libs/testsuite.dex.jar "$stoic_core_sync_dir/plugins/testsuite.dex.jar"
+cp demo-app/without-sdk/build/outputs/apk/debug/without-sdk-debug.apk "$stoic_core_sync_dir/apk/demo-app-without-sdk-debug.apk"
 
 cd "$stoic_dir/native"
 make -j16 all

@@ -57,7 +57,7 @@ typedef struct {
   jmethodID floatCtor;
   jmethodID doubleCtor;
  
-  // com.square.stoic.jvmti.JvmtiMethod stuff
+  // com.squareup.stoic.jvmti.JvmtiMethod stuff
   jclass stoicJvmtiMethodClass;
   jmethodID stoicJvmtiMethodCtor;
   jfieldID stoicJvmtiMethodMethodId;
@@ -71,7 +71,7 @@ typedef struct {
   jfieldID stoicJvmtiMethodPrivateMaxLocals;
   jfieldID stoicJvmtiMethodPrivateModifiers;
 
-  // com.square.stoic.jvmti.JvmtiField stuff
+  // com.squareup.stoic.jvmti.JvmtiField stuff
   jclass stoicJvmtiFieldClass;
   jmethodID stoicJvmtiFieldCtor;
   jfieldID stoicJvmtiFieldClazz;
@@ -92,7 +92,7 @@ thread_local bool callbacksAllowed = true;
 
 static void
 throwJvmtiError(JNIEnv* jni, int result, const char* desc) {
-  ScopedLocalRef<jclass> jvmtiExceptionClass(jni, jni->FindClass("com/square/stoic/jvmti/JvmtiException"));
+  ScopedLocalRef<jclass> jvmtiExceptionClass(jni, jni->FindClass("com/squareup/stoic/jvmti/JvmtiException"));
   CHECK(jvmtiExceptionClass.get() != NULL);
   jmethodID ctor = jni->GetMethodID(jvmtiExceptionClass.get(), "<init>", "(ILjava/lang/String;)V");
   CHECK(ctor != NULL);
@@ -432,7 +432,7 @@ Jvmti_VirtualMachine_nativeGetLocalVariables(JNIEnv *jni, jobject vmClass, jlong
   // This can fail if local variable information isn't available
   JVMTI_THROW_IF_ERROR(jvmti->GetLocalVariableTable(castMethodId, &entryCount, &table), return NULL);
 
-  ScopedLocalRef<jclass> LocalVariable(jni, jni->FindClass("com/square/stoic/jvmti/LocalVariable"));
+  ScopedLocalRef<jclass> LocalVariable(jni, jni->FindClass("com/squareup/stoic/jvmti/LocalVariable"));
   CHECK(LocalVariable.get() != NULL);
   jmethodID ctor = jni->GetMethodID(LocalVariable.get(), "<init>", "(JILjava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V");
   CHECK(ctor != NULL);
@@ -795,7 +795,7 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
   // Setup args that we need for our ClassLoader
   //
 
-  std::string stoicDexJarChars = std::string(stoicDir.c_str()) + std::string("/stoic.dex.jar");
+  std::string stoicDexJarChars = std::string(stoicDir.c_str()) + std::string("/android-server-injected.dex.jar");
   LOG(DEBUG) << "Found stoicDexJarChars: " << stoicDexJarChars.c_str();
 
   std::string dexOutputDirChars = std::string(stoicDir.c_str()) + std::string("/dexout");
@@ -809,7 +809,7 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
 
 
   //
-  // Construct a new ClassLoader for stoic.dex.jar 
+  // Construct a new ClassLoader for android-server-injected.dex.jar
   //
 
   ScopedLocalRef<jclass> klass_DexClassLoader(jni, jni->FindClass("dalvik/system/DexClassLoader"));
@@ -846,7 +846,7 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
   LOG(DEBUG) << "Found loadClass method";
 
   {
-    ScopedLocalRef<jstring> stoicJvmtiVmClassName(jni, jni->NewStringUTF("com.square.stoic.jvmti.VirtualMachine"));
+    ScopedLocalRef<jstring> stoicJvmtiVmClassName(jni, jni->NewStringUTF("com.squareup.stoic.jvmti.VirtualMachine"));
     CHECK(stoicJvmtiVmClassName.get() != nullptr);
 
     ScopedLocalRef<jclass> klass_stoicJvmtiVm(jni, (jclass) jni->CallObjectMethod(dexClassLoader.get(), method_ClassLoader_loadClass, stoicJvmtiVmClassName.get()));
@@ -857,7 +857,7 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
 
   // JvmtiMethod stuff
   {
-    ScopedLocalRef<jstring> stoicJvmtiMethodName(jni, jni->NewStringUTF("com.square.stoic.jvmti.JvmtiMethod"));
+    ScopedLocalRef<jstring> stoicJvmtiMethodName(jni, jni->NewStringUTF("com.squareup.stoic.jvmti.JvmtiMethod"));
     CHECK(stoicJvmtiMethodName.get() != nullptr);
 
     ScopedLocalRef<jclass> klass_stoicJvmtiMethod(jni, (jclass) jni->CallObjectMethod(dexClassLoader.get(), method_ClassLoader_loadClass, stoicJvmtiMethodName.get()));
@@ -900,7 +900,7 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
 
   // JvmtiField stuff
   {
-    ScopedLocalRef<jstring> stoicJvmtiFieldName(jni, jni->NewStringUTF("com.square.stoic.jvmti.JvmtiField"));
+    ScopedLocalRef<jstring> stoicJvmtiFieldName(jni, jni->NewStringUTF("com.squareup.stoic.jvmti.JvmtiField"));
     CHECK(stoicJvmtiFieldName.get() != nullptr);
 
     ScopedLocalRef<jclass> klass_stoicJvmtiField(jni, (jclass) jni->CallObjectMethod(dexClassLoader.get(), method_ClassLoader_loadClass, stoicJvmtiFieldName.get()));
@@ -961,16 +961,16 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
     {"nativeGetMethodId",               "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)J",     (void *)&Jvmti_VirtualMachine_nativeGetMethodId},
     {"nativeSetBreakpoint",             "(JJ)V",                                                        (void *)&Jvmti_VirtualMachine_nativeSetBreakpoint},
     {"nativeClearBreakpoint",           "(JJ)V",                                                        (void *)&Jvmti_VirtualMachine_nativeClearBreakpoint},
-    {"nativeGetMethodCoreMetadata",     "(Lcom/square/stoic/jvmti/JvmtiMethod;)V",                      (void *)&Jvmti_VirtualMachine_nativeGetMethodCoreMetadata},
-    {"nativeGetFieldCoreMetadata",      "(Lcom/square/stoic/jvmti/JvmtiField;)V",                       (void *)&Jvmti_VirtualMachine_nativeGetFieldCoreMetadata},
-    {"nativeGetLocalVariables",         "(J)[Lcom/square/stoic/jvmti/LocalVariable;",                   (void *)&Jvmti_VirtualMachine_nativeGetLocalVariables},
+    {"nativeGetMethodCoreMetadata",     "(Lcom/squareup/stoic/jvmti/JvmtiMethod;)V",                    (void *)&Jvmti_VirtualMachine_nativeGetMethodCoreMetadata},
+    {"nativeGetFieldCoreMetadata",      "(Lcom/squareup/stoic/jvmti/JvmtiField;)V",                     (void *)&Jvmti_VirtualMachine_nativeGetFieldCoreMetadata},
+    {"nativeGetLocalVariables",         "(J)[Lcom/squareup/stoic/jvmti/LocalVariable;",                 (void *)&Jvmti_VirtualMachine_nativeGetLocalVariables},
     {"nativeGetLocalObject",            "(Ljava/lang/Thread;II)Ljava/lang/Object;",                     (void *)&Jvmti_VirtualMachine_nativeGetLocalObject},
     {"nativeGetLocalInt",               "(Ljava/lang/Thread;II)I",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalInt},
     {"nativeGetLocalLong",              "(Ljava/lang/Thread;II)J",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalLong},
     {"nativeGetLocalFloat",             "(Ljava/lang/Thread;II)F",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalFloat},
     {"nativeGetLocalDouble",            "(Ljava/lang/Thread;II)D",                                      (void *)&Jvmti_VirtualMachine_nativeGetLocalDouble},
-    {"nativeGetClassMethods",           "(Ljava/lang/Class;)[Lcom/square/stoic/jvmti/JvmtiMethod;",     (void *)&Jvmti_VirtualMachine_nativeGetClassMethods},
-    {"nativeGetClassFields",            "(Ljava/lang/Class;)[Lcom/square/stoic/jvmti/JvmtiField;",      (void *)&Jvmti_VirtualMachine_nativeGetClassFields},
+    {"nativeGetClassMethods",           "(Ljava/lang/Class;)[Lcom/squareup/stoic/jvmti/JvmtiMethod;",   (void *)&Jvmti_VirtualMachine_nativeGetClassMethods},
+    {"nativeGetClassFields",            "(Ljava/lang/Class;)[Lcom/squareup/stoic/jvmti/JvmtiField;",    (void *)&Jvmti_VirtualMachine_nativeGetClassFields},
     {"nativeToReflectedField",          "(Ljava/lang/Class;JZ)Ljava/lang/reflect/Field;",               (void *)&Jvmti_VirtualMachine_nativeToReflectedField},
     {"nativeToReflectedMethod",         "(Ljava/lang/Class;JZ)Ljava/lang/Object;",                      (void *)&Jvmti_VirtualMachine_nativeToReflectedMethod},
     {"nativeGetClassSignature",         "(Ljava/lang/Class;)Ljava/lang/String;",                        (void *)&Jvmti_VirtualMachine_nativeGetClassSignature},
@@ -986,7 +986,7 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
   //
 
   ScopedLocalRef<jstring> androidServerMainClassName(jni, jni->NewStringUTF(
-      "com.square.stoic.android.server.AndroidServerJarKt"));
+      "com.squareup.stoic.android.server.AndroidServerJarKt"));
   CHECK(androidServerMainClassName.get() != nullptr);
 
   ScopedLocalRef<jclass> klass_AndroidServerJarKt(jni, (jclass) jni->CallObjectMethod(

@@ -10,7 +10,7 @@ cd $script_dir
 # pidof succeeded. This test runs 100 iterations of that scenario
 for i in $(seq 1 100); do
     echo iteration: $i
-    adb shell am force-stop com.square.stoic.example && stoic helloworld
+    adb shell am force-stop com.squareup.stoic.demoapp.withoutsdk && stoic helloworld
     if [ $? -ne 0 ]; then
         echo "Command failed on iteration $i: $?"
         exit 1

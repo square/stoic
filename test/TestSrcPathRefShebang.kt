@@ -7,10 +7,10 @@ exit 0
 package shebang
 
 import android.app.Application
-import com.square.stoic.print.*
-import com.square.stoic.isAndroid
-import com.square.stoic.stoic
-import com.square.stoic.jvmti
+import com.squareup.stoic.print.*
+import com.squareup.stoic.isAndroid
+import com.squareup.stoic.stoic
+import com.squareup.stoic.jvmti
 
 @Suppress("UNUSED_PARAMETER")
 fun main(args: List<String>): Int {

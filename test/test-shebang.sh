@@ -28,12 +28,12 @@ verify_output() {
 
 cd "$script_dir"
 
-verify_output 'args: [hello world, !]'                                                     $LINENO ./TestHostShebang.kt "hello world" "!"
-verify_output 'args: []'                                                                   $LINENO ./TestHostShebang.kt
-verify_output 'pkg: com.square.stoic.example, args: [hello world, !]'                      $LINENO ./TestXplatShebang.kt "hello world" "!"
-verify_output 'pkg: jvm, args: [hello world, !]'                                           $LINENO ./TestXplatShebang.kt --host "hello world" "!"
-verify_output 'pkg: com.square.stoic.example, args: []'                                    $LINENO ./TestXplatShebang.kt
-verify_output 'pkg: jvm, args: []'                                                         $LINENO ./TestXplatShebang.kt --host
-verify_output "pkg: jvm, $script_dir/TestSrcPathRefShebang.kt"                             $LINENO ./TestSrcPathRefShebang.kt --host
-verify_output "pkg: com.square.stoic.example, $script_dir/TestSrcPathRefShebang.kt"        $LINENO ./TestSrcPathRefShebang.kt
+verify_output 'args: [hello world, !]'                                                           $LINENO ./TestHostShebang.kt "hello world" "!"
+verify_output 'args: []'                                                                         $LINENO ./TestHostShebang.kt
+verify_output 'pkg: com.squareup.stoic.demoapp.withoutsdk, args: [hello world, !]'               $LINENO ./TestXplatShebang.kt "hello world" "!"
+verify_output 'pkg: jvm, args: [hello world, !]'                                                 $LINENO ./TestXplatShebang.kt --host "hello world" "!"
+verify_output 'pkg: com.squareup.stoic.demoapp.withoutsdk, args: []'                             $LINENO ./TestXplatShebang.kt
+verify_output 'pkg: jvm, args: []'                                                               $LINENO ./TestXplatShebang.kt --host
+verify_output "pkg: jvm, $script_dir/TestSrcPathRefShebang.kt"                                   $LINENO ./TestSrcPathRefShebang.kt --host
+verify_output "pkg: com.squareup.stoic.demoapp.withoutsdk, $script_dir/TestSrcPathRefShebang.kt" $LINENO ./TestSrcPathRefShebang.kt
 

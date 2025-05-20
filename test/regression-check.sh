@@ -11,7 +11,7 @@ rm -r "$script_dir/../out"
 
 "$script_dir"/shellcheck.sh
 "$script_dir"/test-shell.sh
-"$script_dir"/test-example-apk.sh
+"$script_dir"/test-demo-app-without-sdk.sh
 
 # TODO: these tests require functionality not available on older versions of
 #   Android
