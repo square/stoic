@@ -1,16 +1,16 @@
 plugins {
-  id("com.android.application")
-  id("org.jetbrains.kotlin.android")
+  alias(libs.plugins.android.application)
+  alias(libs.plugins.kotlin.android)
 }
 
 android {
   namespace = "com.squareup.stoic.demoapp.withoutsdk"
-  compileSdk = 35
+  compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
   defaultConfig {
     applicationId = "com.squareup.stoic.demoapp.withoutsdk"
-    minSdk = 26
-    targetSdk = 35
+    minSdk = libs.versions.androidMinSdk.get().toInt()
+    targetSdk = libs.versions.androidTargetSdk.get().toInt()
     versionCode = 1
     versionName = "1.0"
 
@@ -24,11 +24,12 @@ android {
     }
   }
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    val jvmTarget = JavaVersion.toVersion(libs.versions.jvmTarget.get())
+    sourceCompatibility = jvmTarget
+    targetCompatibility = jvmTarget
   }
   kotlinOptions {
-    jvmTarget = "1.8"
+    jvmTarget = libs.versions.jvmTarget.get()
   }
   buildFeatures {
     viewBinding = true
