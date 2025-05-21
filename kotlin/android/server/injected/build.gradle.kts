@@ -16,7 +16,7 @@ dependencies {
     implementation(project(":android:plugin-sdk"))
     implementation(project(":android:server:core"))
     implementation(project(":common"))
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation(libs.kotlinx.serialization.json)
     compileOnly(files("$androidHome/platforms/android-${libs.versions.androidCompileSdk.get()}/android.jar"))
 }
 
