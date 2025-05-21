@@ -63,9 +63,9 @@ cd "$stoic_kotlin_dir"
 # :demo-app:without-sdk is the debug app that's used by default. It needs to be debug so
 # that stoic can attach to it.
 ./gradlew --parallel :host:main:assemble :android:plugin-sdk:assemble :android:server:injected:dexJar :android:main:dexJar :demo-plugin:helloworld:dexJar :demo-plugin:appexitinfo:dexJar :demo-plugin:breakpoint:dexJar :demo-plugin:crasher:dexJar :demo-plugin:testsuite:dexJar :demo-app:without-sdk:assembleDebug
-cp host/main/build/libs/main.jar "$stoic_release_dir"/jar/host-main.jar
-cp android/plugin-sdk/build/libs/plugin-sdk.jar "$stoic_release_dir"/jar/android-plugin-sdk.jar
-cp android/plugin-sdk/build/libs/plugin-sdk-sources.jar "$stoic_release_dir"/jar/android-plugin-sdk-sources.jar
+cp host/main/build/libs/main.jar "$stoic_release_dir"/jar/stoic-host-main.jar
+cp android/plugin-sdk/build/libs/plugin-sdk.jar "$stoic_release_dir"/jar/stoic-android-plugin-sdk.jar
+cp android/plugin-sdk/build/libs/plugin-sdk-sources.jar "$stoic_release_dir"/jar/stoic-android-plugin-sdk-sources.jar
 cp android/server/injected/build/libs/injected.dex.jar "$stoic_core_sync_dir/stoic/android-server-injected.dex.jar"
 cp android/main/build/libs/main.dex.jar "$stoic_core_sync_dir/stoic/android-main.dex.jar"
 cp demo-plugin/appexitinfo/build/libs/appexitinfo.dex.jar "$stoic_core_sync_dir/plugins/appexitinfo.dex.jar"

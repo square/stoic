@@ -1,6 +1,6 @@
 import android.app.Application
-import com.square.stoic.helpers.*
-import com.square.stoic.threadlocals.jvmti
+import com.squareup.stoic.helpers.*
+import com.squareup.stoic.threadlocals.jvmti
 
 /**
  * Welcome to stoic! Please use this plugin as a scrapbook to explore what

@@ -11,4 +11,4 @@ stoic_release_dir="$(realpath "$script_dir/..")"
 source "$stoic_release_dir"/script/android_serial.sh
 _android_serial
 
-java -jar "$stoic_release_dir"/jar/host-main.jar "$stoic_release_dir" "$@"
+java -jar "$stoic_release_dir"/jar/stoic-host-main.jar "$stoic_release_dir" "$@"

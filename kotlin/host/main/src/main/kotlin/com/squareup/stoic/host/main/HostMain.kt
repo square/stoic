@@ -74,8 +74,7 @@ fun wrappedMain(rawArgs: Array<String>): Int {
   stoicHostScriptDir = "$stoicReleaseDir/script"
   stoicHostCoreSyncDir = "$stoicReleaseDir/sync"
 
-  val home = System.getenv("HOME")
-  stoicHostUsrConfigDir = "$home/.config/stoic"
+  stoicHostUsrConfigDir = System.getenv("STOIC_CONFIG") ?: "${System.getenv("HOME")}/.config/stoic"
   stoicHostUsrSyncDir = "$stoicHostUsrConfigDir/sync"
   stoicHostUsrPluginSrcDir = "$stoicHostUsrConfigDir/plugin"
 
@@ -155,15 +154,15 @@ fun runSetup(stoicArgs: List<String>, commandArgs: List<String>): Int {
     "$stoicHostUsrConfigDir/")
     .inheritIO().waitFor(0)
 
-  ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoicAndroid.jar", "$stoicHostUsrPluginSrcDir/lib/")
+  ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoic-android-plugin-sdk.jar", "$stoicHostUsrPluginSrcDir/lib/")
     .inheritIO().waitFor(0)
-  ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoicAndroid-sources.jar", "$stoicHostUsrPluginSrcDir/lib/")
+  ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoic-android-plugin-sdk-sources.jar", "$stoicHostUsrPluginSrcDir/lib/")
     .inheritIO().waitFor(0)
 
   println("""
     Setup complete!
     
-    Next steps:
+    Complete the following tutorial steps to familiarize yourself with Stoic:
     1. Connect an Android device (if you haven't done so already)
     2. Run `stoic helloworld` from the command-line
     3. Run `stoic scratch` from the command-line, then open it up in Android Studio and play around
