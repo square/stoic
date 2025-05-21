@@ -17,18 +17,11 @@ dependencies {
 
     implementation(project(":android:plugin-sdk"))
     implementation(project(":android:server:core"))
-    //implementation(kotlin("stdlib"))
     implementation(project(":common"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
     compileOnly(files("$androidHome/platforms/android-34/android.jar"))
 }
-
-//tasks.withType<KotlinCompile> {
-//    kotlinOptions {
-//        jvmTarget = "17"
-//    }
-//}
 
 tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE

@@ -14,56 +14,32 @@ repositories {
 }
 
 subprojects {
-    // Assuming all subprojects apply the 'java' plugin and potentially produce a JAR
     plugins.withId("java") {
-        val copyJar by tasks.registering {
-            dependsOn("jar")
+        val androidHome = providers.environmentVariable("ANDROID_HOME")
+            .orNull ?: throw GradleException("ANDROID_HOME environment variable not set.")
 
-            // Register JAR_PATH as an input to influence up-to-date checks
-            val jarPath: String? = System.getenv("JAR_PATH") ?: throw IllegalArgumentException("Environment variable JAR_PATH not set or invalid")
-            inputs.property("jarPath", jarPath)
+        val jarTask = tasks.named<Jar>("jar")
+        val jarFile = jarTask.flatMap { it.archiveFile }.map { it.asFile }
 
-            doLast {
-                val jarTask = tasks.named<Jar>("jar").get()
-                val sourcePath = jarTask.archiveFile.get().asFile.toPath()
-                val jarFile = File(jarPath)
-                jarFile.parentFile.mkdirs()
+        val dexJarFile = jarFile.map { File(it.path.replace(".jar", ".dex.jar")) }
 
-                Files.copy(sourcePath, jarFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-                //println("JAR file copied to: $jarPath")
+        val dexJar = tasks.register<Exec>("dexJar") {
+            dependsOn(jarTask)
+
+            inputs.file(jarFile)
+            outputs.file(dexJarFile)
+
+            doFirst {
+                commandLine(
+                    "$androidHome/build-tools/35.0.1/d8",
+                    "--min-api", "26",
+                    "--output", dexJarFile.get().absolutePath,
+                    jarFile.get().absolutePath
+                )
             }
         }
 
-        val androidHome: String? = System.getenv("ANDROID_HOME")
-        val dexJar by tasks.registering(Exec::class) {
-            if (androidHome == null) {
-                throw GradleException("ANDROID_HOME environment variable is not set.")
-            }
-
-            dependsOn("jar")
-
-            val jarTask = tasks.named<Jar>("jar").get()
-            val sourcePath = jarTask.archiveFile.get().asFile.getAbsolutePath()
-            val dexJar = sourcePath.replace(".jar$".toRegex(), ".dex.jar")
-            extensions.add("dexJar", dexJar)
-            commandLine("$androidHome/build-tools/35.0.1/d8", "--min-api", "26", "--output", dexJar, sourcePath)
-        }
-
-        val copyDexJar by tasks.registering {
-            dependsOn("dexJar")
-
-            // Register JAR_PATH as an input to influence up-to-date checks
-            val dstPathStr: String? = System.getenv("JAR_PATH") ?: throw IllegalArgumentException("Environment variable JAR_PATH not set or invalid")
-            inputs.property("dstPathStr", dstPathStr)
-
-            doLast {
-                val jarTask = tasks.named("dexJar").get()
-                val sourceFile = File(jarTask.extensions.getByName("dexJar") as String)
-                val dstFile = File(dstPathStr)
-                dstFile.parentFile.mkdirs()
-
-                Files.copy(sourceFile.toPath(), dstFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            }
-        }
+        // Optional: expose the output path using a Gradle property
+        extensions.add("dexJarPath", dexJarFile)
     }
 }

@@ -12,9 +12,6 @@ repositories {
 dependencies {
     implementation(kotlin("stdlib"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-
-    //testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
-    //testImplementation("junit:junit:4.13.2")
 }
 
 tasks.withType<KotlinCompile> {

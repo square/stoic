@@ -5,9 +5,6 @@ plugins {
   id("org.jetbrains.kotlin.android")
 }
 
-// TODO: provide a way for apps to specify a different key
-val stoicSshKeyFile = File(System.getProperty("user.home"), ".config/stoic/sync/ssh/id_rsa.pub")
-
 android {
   namespace = "com.squareup.stoic.android.sdk"
   compileSdk = 34
@@ -20,22 +17,6 @@ android {
   }
 
   buildTypes {
-    all {
-      // Read and escape the key, or use null if missing
-      val authorizedKey = if (stoicSshKeyFile.exists()) {
-        stoicSshKeyFile.readText().trim()
-          .replace("\\", "\\\\")
-          .replace("\"", "\\\"")
-      } else {
-        null
-      }
-
-      buildConfigField(
-        "String",
-        "STOIC_AUTHORIZED_KEY",
-        authorizedKey?.let { "\"$it\"" } ?: "null"
-      )
-    }
     release {
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -58,15 +39,6 @@ android {
   buildFeatures {
     buildConfig = true
   }
-}
-
-// Inform gradle that Kotlin compilation depends on the stoicSshKeyFile (the path and the contents)
-// Without this, anything that inlines STOIC_AUTHORIZED_KEY (e.g. StoicContentProvider) might pull
-// stale outputs from the cache.
-tasks.withType<KotlinCompile>().configureEach {
-  inputs.file(stoicSshKeyFile)
-    .withPathSensitivity(PathSensitivity.ABSOLUTE)
-    .withPropertyName("sshKeyFileUsedInBuildConfig")
 }
 
 dependencies {
