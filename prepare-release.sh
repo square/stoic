@@ -8,7 +8,7 @@ cd "$script_dir"/kotlin
 
 echo
 echo
-echo 'Next steps:'
-echo '1. commit version change and push (git commit -m "version bump" && git push)'
-echo '2. Upload /Users/tomm/Development/stoic/releases/stoic-0.0.2.tar.gz to Github Releases'
+echo 'Release prepared locally.'
+echo 'To actually complete the release, see "Next Steps" above'
+echo
 echo

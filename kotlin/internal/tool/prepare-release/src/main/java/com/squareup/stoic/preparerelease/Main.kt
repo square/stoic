@@ -32,7 +32,7 @@ fun main(args: Array<String>) {
     exitProcess(1)
   }
 
-  // TODO: verify git is clean
+  ensureCleanGitRepo(stoicDir)
 
   println("running test/regression-check.sh... (this will take a while)")
   check(ProcessBuilder("$stoicDir/test/regression-check.sh").inheritIO().start().waitFor() == 0)
@@ -58,15 +58,36 @@ fun main(args: Array<String>) {
 
   versionFile.writeText("$postReleaseVersion\n")
 
+  val releaseTag = "v$releaseVersion"
   println(
     """
+      
+      
+      
+      Release version: $releaseVersion
+      Release tag: $releaseTag
       Release prepared successfully: $releaseTar
       Version incremented to: $postReleaseVersion
+      
+      
+      Next steps:
+      
+      # Make sure you're in the right directory
+      cd $stoicDir
+      
+      # tag the release and push it
+      git tag $releaseTag && git push origin $releaseTag
+      
+      # Commit the version bump and push it
+      git add prebuild/STOIC_VERSION && git commit -m "$postReleaseVersion version bump" && git push
+      
+      # Upload the release to Github
+      gh release create $releaseTag $releaseTar --title $releaseTag
+      
+      
+      
     """.trimIndent()
   )
-  // TODO:
-  // prompt the user to commit/push the changes to the version file and
-  //   upload the release
 }
 
 fun validateSemver(version: String): Boolean =
@@ -76,4 +97,19 @@ fun incrementSemver(version: String): String {
   val clean = version.removeSuffix("-SNAPSHOT")
   val parts = clean.split(".").map { it.toInt() }
   return "${parts[0]}.${parts[1]}.${parts[2] + 1}-SNAPSHOT"
+}
+
+fun ensureCleanGitRepo(stoicDir: File) {
+  val process = ProcessBuilder("git", "status", "--porcelain")
+    .directory(stoicDir)
+    .redirectErrorStream(true)
+    .start()
+
+  val output = process.inputStream.bufferedReader().readText().trim()
+  process.waitFor()
+
+  if (output.isNotEmpty()) {
+    System.err.println("The git repository has uncommitted changes or untracked files. Aborting...")
+    exitProcess(1)
+  }
 }
