@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
   alias(libs.plugins.android.library)
   alias(libs.plugins.kotlin.android)
@@ -11,7 +9,6 @@ android {
 
   defaultConfig {
     minSdk = (extra["stoic.android_min_sdk"] as String).toInt()
-    targetSdk = (extra["stoic.android_target_sdk"] as String).toInt()
 
     testInstrumentationRunner = "android.support.test.runner.AndroidJUnitRunner"
     consumerProguardFiles("consumer-rules.pro")

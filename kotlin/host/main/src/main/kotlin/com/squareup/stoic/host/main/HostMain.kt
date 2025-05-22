@@ -1,6 +1,6 @@
 package com.squareup.stoic.host.main
 
-import com.squareup.stoic.StoicProperties
+import com.squareup.stoic.bridge.StoicProperties
 import com.squareup.stoic.common.FailedExecException
 import com.squareup.stoic.common.LogLevel.WARN
 import com.squareup.stoic.common.MainParsedArgs

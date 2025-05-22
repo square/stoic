@@ -1,5 +1,4 @@
 [versions]
-kotlin = "1.9.24"
 kotlinPlugin = "1.9.24"
 androidGradle = "8.9.0"
 jvmTarget = "17"
@@ -10,6 +9,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlinPlugin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlinPlugin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlinPlugin" }
 android-application = { id = "com.android.application", version.ref = "androidGradle" }
 android-library = { id = "com.android.library", version.ref = "androidGradle" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version = "2.0.0" }
+application = { id = "application" }
