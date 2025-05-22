@@ -79,7 +79,7 @@ fun main(args: Array<String>) {
       git tag $releaseTag && git push origin $releaseTag
       
       # Commit the version bump and push it
-      git add prebuild/STOIC_VERSION && git commit -m "$postReleaseVersion version bump" && git push
+      git add prebuilt/STOIC_VERSION && git commit -m "$postReleaseVersion version bump" && git push
       
       # Upload the release to Github
       gh release create $releaseTag $releaseTar --title $releaseTag
