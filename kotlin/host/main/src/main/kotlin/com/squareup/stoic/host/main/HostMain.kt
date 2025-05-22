@@ -1,5 +1,6 @@
 package com.squareup.stoic.host.main
 
+import com.squareup.stoic.StoicProperties
 import com.squareup.stoic.common.FailedExecException
 import com.squareup.stoic.common.LogLevel.WARN
 import com.squareup.stoic.common.MainParsedArgs
@@ -10,19 +11,16 @@ import com.squareup.stoic.common.LogLevel.DEBUG
 import com.squareup.stoic.common.logBlock
 import com.squareup.stoic.common.logDebug
 import com.squareup.stoic.common.logError
-import com.squareup.stoic.common.logVerbose
 import com.squareup.stoic.common.minLogLevel
 import com.squareup.stoic.common.runCommand
 import com.squareup.stoic.common.serverSocketName
 import com.squareup.stoic.common.stdout
 import com.squareup.stoic.common.stoicDeviceDevJarDir
-import com.squareup.stoic.common.stoicDeviceSyncPluginDir
 import com.squareup.stoic.common.waitFor
 import java.io.File
 
 import java.lang.ProcessBuilder.Redirect
 import java.net.Socket
-import java.util.Locale
 import kotlin.system.exitProcess
 
 
@@ -137,10 +135,11 @@ fun runPlugin(mainParsedArgs: MainParsedArgs): Int {
 }
 
 fun runSetup(stoicArgs: List<String>, commandArgs: List<String>): Int {
-  // Maybe we store the canonical version in Kotlin eventually.
-  // Maybe build.sh can be replaced with Kotlin
-  val buildToolsVersion = readUtilKey("stoic_build_tools_version")
-  val targetApiLevel = readUtilKey("stoic_target_api_level")
+  // StoicProperties is generated - need to run `./gradlew :generateStoicVersion` and sync
+  // in order for AndroidStudio to recognize it.
+  val buildToolsVersion = StoicProperties.ANDROID_BUILD_TOOLS_VERSION
+  val targetApiLevel = StoicProperties.ANDROID_TARGET_SDK
+
   checkRequiredSdkPackages(
     "build-tools;$buildToolsVersion",
     "platforms;android-$targetApiLevel")
@@ -186,62 +185,17 @@ fun readUtilKey(key: String): String {
     .inheritIO().stdout()
 }
 
-// function check_required {
-//     # Check for required packages
-//     sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-//     sdk_packages="$("$sdkmanager" --list_installed 2>/dev/null | awk '{print $1}')"
-//     missing=()
-//     for required in "$@"; do
-//         if ! echo "$sdk_packages" | grep "$required" >/dev/null; then
-//             missing+=("$required")
-//         fi
-//     done
-//     if [ ${#missing[@]} -gt 0 ]; then
-//         echo "stoic requires Android SDK package ${missing[*]}"
-//         echo "Okay to install? (will run '$sdkmanager ${missing[*]}')"
-//         read -r -p "Y/n: " choice
-//         case "$(echo "$choice" | tr '[:upper:]' '[:lower:]')" in
-//           n*)
-//             exit 1
-//             ;;
-//           *)
-//             $sdkmanager "${missing[@]}"
-//             ;;
-//         esac
-//     fi
-// }
 fun checkRequiredSdkPackages(vararg required: String) {
-  val androidHome = System.getenv("ANDROID_HOME")
-    ?: throw PithyException("Please set ANDROID_HOME env var.")
-  val sdkManager = "$androidHome/cmdline-tools/latest/bin/sdkmanager"
-  val sdkPackages = ProcessBuilder(
-    listOf("sh", "-c", "$sdkManager --list_installed 2>/dev/null | awk '{print $1}'")
+  runCommand(
+    listOf("$stoicReleaseDir/script/check_required_sdk_packages.sh") + required,
+    inheritIO = true
   )
-    .inheritIO()
-    .stdout()
-    .split("\n")
-
-  val missing = required.filter { !sdkPackages.contains(it) }
-  if (missing.isNotEmpty()) {
-    val missingStr = missing.joinToString(" ")
-    System.err.println("Stoic requires the following Android SDK Packages: $missingStr")
-    System.err.println("Okay to install? (will run '$sdkManager $missingStr'")
-    System.err.println("Y/n? ")
-    val input = readln()
-    when (input.lowercase(Locale.getDefault())) {
-      "y", "" -> Unit
-      else -> throw PithyException("aborted setup")
-    }
-
-    ProcessBuilder(sdkManager, missingStr).inheritIO().waitFor()
-  }
 }
 
 fun runVersion(stoicArgs: List<String>, commandArgs: List<String>): Int {
-  runCommand(listOf("""
-    source $stoicReleaseDir/script/util.sh
-    echo ${'$'}stoic_version
-  """.trimIndent()), shell = true, inheritIO = true)
+  // StoicProperties is generated - need to run `./gradlew :generateStoicVersion` and sync
+  // in order for AndroidStudio to recognize it.
+  println(StoicProperties.STOIC_VERSION_NAME)
 
   return 0
 }

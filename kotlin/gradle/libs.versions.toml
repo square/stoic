@@ -2,10 +2,6 @@
 kotlin = "1.9.24"
 kotlinPlugin = "1.9.24"
 androidGradle = "8.9.0"
-androidCompileSdk = "34"
-androidMinSdk = "26"
-androidTargetSdk = "34"
-androidBuildTools = "35.0.1"
 jvmTarget = "17"
 
 [libraries]

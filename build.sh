@@ -6,9 +6,8 @@ stoic_dir="$(realpath "$(dirname "$(readlink -f "$0")")")"
 stoic_kotlin_dir="$stoic_dir/kotlin"
 stoic_release_dir="$stoic_dir/out/rel"
 stoic_core_sync_dir="$stoic_release_dir/sync"
-#stoic_min_api_level=26
 
-source "$stoic_dir/prebuilt/script/util.sh"
+source "$stoic_dir/prebuilt/stoic.properties"
 
 mkdir -p "$stoic_release_dir"/jar
 rsync --archive "$stoic_dir"/prebuilt/ "$stoic_release_dir"/
@@ -53,10 +52,10 @@ if ! verify_submodules native/libbase/ native/fmtlib/ native/libnativehelper/; t
 fi
 
 mkdir -p "$stoic_core_sync_dir"/{plugins,stoic,bin,apk}
-check_required "build-tools;$stoic_build_tools_version" "platforms;android-$stoic_target_api_level" "ndk;$stoic_ndk_version"
+"$stoic_dir"/prebuilt/script/check_required_sdk_packages.sh "build-tools;$android_build_tools_version" "platforms;android-$android_target_sdk" "ndk;$android_ndk_version"
 
 # Used by native/Makefile.inc
-export ANDROID_NDK="$ANDROID_HOME/ndk/$stoic_ndk_version"
+export ANDROID_NDK="$ANDROID_HOME/ndk/$android_ndk_version"
 
 cd "$stoic_kotlin_dir"
 

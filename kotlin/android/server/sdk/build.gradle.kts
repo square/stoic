@@ -7,11 +7,11 @@ plugins {
 
 android {
   namespace = "com.squareup.stoic.android.sdk"
-  compileSdk = libs.versions.androidCompileSdk.get().toInt()
+  compileSdk = (extra["stoic.android_compile_sdk"] as String).toInt()
 
   defaultConfig {
-    minSdk = libs.versions.androidMinSdk.get().toInt()
-    targetSdk = libs.versions.androidTargetSdk.get().toInt()
+    minSdk = (extra["stoic.android_min_sdk"] as String).toInt()
+    targetSdk = (extra["stoic.android_target_sdk"] as String).toInt()
 
     testInstrumentationRunner = "android.support.test.runner.AndroidJUnitRunner"
     consumerProguardFiles("consumer-rules.pro")

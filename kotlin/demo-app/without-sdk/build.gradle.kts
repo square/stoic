@@ -5,14 +5,14 @@ plugins {
 
 android {
   namespace = "com.squareup.stoic.demoapp.withoutsdk"
-  compileSdk = libs.versions.androidCompileSdk.get().toInt()
+  compileSdk = (extra["stoic.android_compile_sdk"] as String).toInt()
 
   defaultConfig {
     applicationId = "com.squareup.stoic.demoapp.withoutsdk"
-    minSdk = libs.versions.androidMinSdk.get().toInt()
-    targetSdk = libs.versions.androidTargetSdk.get().toInt()
-    versionCode = 1
-    versionName = "1.0"
+    minSdk = (extra["stoic.android_min_sdk"] as String).toInt()
+    targetSdk = (extra["stoic.android_target_sdk"] as String).toInt()
+    versionCode = extra["stoic.version_code"] as Int
+    versionName = extra["stoic.version_name"] as String
 
     testInstrumentationRunner = "android.support.test.runner.AndroidJUnitRunner"
   }
@@ -37,7 +37,6 @@ android {
 }
 
 dependencies {
-
   implementation("com.android.support:appcompat-v7:28.0.0")
   testImplementation("junit:junit:4.13.2")
   androidTestImplementation("com.android.support.test:runner:1.0.2")

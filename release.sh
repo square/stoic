@@ -45,7 +45,7 @@ increment_semver() {
 
 stoic_dir="$(realpath "$(dirname "$(readlink -f "$0")")")"
 cd "$stoic_dir"
-source "$stoic_dir/prebuilt/script/util.sh"
+stoic_version="$(cat "$stoic_dir"/prebuilt/STOIC_VERSION)"
 
 if [ $# != 1 ]; then
     >&2 echo "Expected exactly one argument, the next version (current version is $stoic_version)"
@@ -71,7 +71,7 @@ if [ -n "$(git status --porcelain)" ]; then
     exit 1
 fi
 
-sed -i "" "s/stoic_version=$old_version/stoic_version=$stoic_version/" "$stoic_dir/prebuilt/script/util.sh"
+echo "$stoic_version" > "$stoic_dir"/prebuilt/STOIC_VERSION
 
 # Remove out/ to get rid of any stale artifacts
 rm -r out/
@@ -80,10 +80,10 @@ tar -czf "$archive_name" -C out/rel .
 
 
 new_version="$(increment_semver "$stoic_version")"
-sed -i "" "s/stoic_version=$old_version/stoic_version=$stoic_version/" "$stoic_dir/prebuilt/script/util.sh"
+echo "$new_version" > "$stoic_dir"/prebuilt/STOIC_VERSION
 
 echo
 echo
-echo "Created $archive_name and incremented the version to $new_version"
+echo "Created $archive_name and set version to $new_version (previous version was $old_version)"
 echo
 echo

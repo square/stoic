@@ -9,6 +9,11 @@ repositories {
     mavenCentral()
 }
 
+val generatedStoicVersionDir = rootProject.extra["stoicGeneratedSourceDir"] as Provider<*>
+val generateStoicVersionTask = rootProject.extra["generateStoicVersion"] as TaskProvider<*>
+sourceSets["main"].java.srcDir(generatedStoicVersionDir)
+tasks.named("compileKotlin").configure { dependsOn(generateStoicVersionTask) }
+
 dependencies {
     implementation(kotlin("stdlib"))
     implementation(libs.kotlinx.serialization.json)
