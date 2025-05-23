@@ -42,12 +42,13 @@ device or emulator, pre-configured according to your custom `bashrc`/`vimrc`/etc
 ## Getting started
 
 1. Install with [Homebrew](https://brew.sh/): `brew install tcmulcahy/stoic/stoic`
-2. Run: `stoic helloworld`
-3. Setup configuration: `stoic setup` (this initializes `~/.config/stoic`)
-4. Run your first Stoic plugin: `stoic scratch`
-   (if you don't specify a package, Stoic will run on `com.squareup.stoic.demoapp.withoutsdk`
-   by default - a simple app bundled with Stoic)
-5. Open up `~/.config/stoic/plugin` with Android Studio to modify this plugin and explore what Stoic can do.
+2. Run your first Stoic plugin: `stoic helloworld`
+3. When you don't specify a package, Stoic injects itself into `com.squareup.stoic.demoapp.withoutsdk`
+   by default - a simple app bundled with Stoic. Run `stoic --pkg <your-app> helloworld` to inject into your
+   own app instead.
+4. Setup configuration: `stoic setup` (this initializes `~/.config/stoic`)
+5. Run a plugin that you can modify: `stoic scratch`
+6. Open up `~/.config/stoic/plugin` with Android Studio to modify this plugin and explore what Stoic can do.
 
 Stoic works on any API 26+ Android device / emulator, with any debuggable app (that I've tested so far).
 
