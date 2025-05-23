@@ -41,11 +41,11 @@ device or emulator, pre-configured according to your custom `bashrc`/`vimrc`/etc
 
 ## Getting started
 
-1. Checkout the repo: `git clone https://github.com/square/stoic && cd stoic`
-2. Build it: `./build.sh`
+1. Install with [Homebrew](https://brew.sh/): `brew install tcmulcahy/stoic/stoic`
+2. Run: `stoic helloworld`
 3. Setup configuration: `stoic setup` (this initializes `~/.config/stoic`)
-4. Run your first Stoic plugin: `stoic --pkg com.square.stoic.example scratch`
-   (if you don't specify a package, Stoic will run on `com.square.stoic.example`
+4. Run your first Stoic plugin: `stoic scratch`
+   (if you don't specify a package, Stoic will run on `com.squareup.stoic.demoapp.withoutsdk`
    by default - a simple app bundled with Stoic)
 5. Open up `~/.config/stoic/plugin` with Android Studio to modify this plugin and explore what Stoic can do.
 
@@ -78,14 +78,11 @@ for (bitmap in jvmti.instances(Bitmap::class.java)) {
 
 ## Architecture
 
-Stoic is built on public APIs so it will continue to work far into the future.
 The primary technologies powering Stoic are
 [JVMTI](https://en.wikipedia.org/wiki/Java_Virtual_Machine_Tools_Interface),
 Unix Domain Sockets, `socat`, `rsync`, and `run-as`.
 
 The first time you run Stoic on a process it will attach a jvmti agent which
-will start a server inside the process. We connect to this server
-through a unix domain socket (via `run-as pkg socat ...` for permissions reasons).
-Each socket connection corresponds to a unique plugin. We multiplex
-stdin/stdout/stderr over this connection. See
+will start a server inside the process. We connect to this server through a
+unix domain socket, and multiplex stdin/stdout/stderr over this connection. See
 https://github.com/square/stoic/blob/main/docs/ARCHITECTURE.md for more details.
