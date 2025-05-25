@@ -98,7 +98,8 @@ fun runCommand(
         .readText()
       throw FailedExecException(
         exitCode,
-        "Failed command: '${commandParts.toKotlinRepr()}', exitCode=$exitCode, error output:\n---\n$errorOutput---")
+        "Failed command: '${commandParts.toKotlinRepr()}', exitCode=$exitCode, error output:\n---\n$errorOutput---",
+        errorOutput)
     }
 
     return if (chomp) {
@@ -165,15 +166,19 @@ fun Process.waitFor(expectedExitCode: Int?, command: List<String>? = null) {
   val exitCode = waitFor()
 
   if (expectedExitCode != null && expectedExitCode != exitCode) {
-    val errorOutput = if (errorStream != null) {
-      ", error output:\n---\n${errorStream.bufferedReader().readText()}---"
+    val errorOutput = errorStream?.reader()?.readText()?.let {
+      if (it.isBlank()) { null } else { it.removeSuffix("\n") }
+    }
+    val errorOutputMsg = if (errorOutput != null) {
+      ", error output:\n---\n$errorOutput\n---"
     } else {
       ""
     }
     val commandString = if (command != null) { "'${command.toKotlinRepr()}', " } else { "" }
     throw FailedExecException(
       exitCode,
-      "Failed command: ${commandString}exitCode=$exitCode$errorOutput")
+      "Failed command: ${commandString}exitCode=$exitCode$errorOutputMsg",
+      errorOutput)
   }
 }
 

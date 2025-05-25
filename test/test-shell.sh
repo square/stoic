@@ -3,7 +3,7 @@
 alias stoic=$stoic_dir/out/rel/bin/stoic
 
 should_be_hello() {
-    stoic shell -T <<EOF
+    stoic tool shell -T <<EOF
         echo "hello"
 EOF
 }

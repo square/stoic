@@ -4,11 +4,6 @@ class PluginParsedArgs(
   val pkg: String,
   val restartApp: Boolean,
   val startIfNeeded: Boolean,
-  val devMode: Boolean,
-  val shebangMode: Boolean,
-  val runInHost: Boolean,
-  val runInShell: Boolean,
-  val runAsRoot: Boolean,
   val pluginModule: String,
   val pluginArgs: List<String>,
   val pluginEnvVars: Map<String, String>,
@@ -83,11 +78,6 @@ class PluginParsedArgs(
         pkg = pkg,
         restartApp = restartApp,
         startIfNeeded = startIfNeeded,
-        devMode = devMode,
-        shebangMode = shebangMode,
-        runInHost = runInHost,
-        runInShell = false, // TODO
-        runAsRoot = false, // TODO
         pluginModule = mainParsedArgs.command,
         pluginArgs = mainParsedArgs.commandArgs,
         pluginEnvVars = pluginEnvVars,

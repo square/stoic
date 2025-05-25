@@ -10,6 +10,7 @@ stoic_core_sync_dir="$stoic_release_dir/sync"
 source "$stoic_dir/prebuilt/stoic.properties"
 
 mkdir -p "$stoic_release_dir"/jar
+mkdir -p "$stoic_release_dir"/bin
 rsync --archive "$stoic_dir"/prebuilt/ "$stoic_release_dir"/
 
 # Sets things up so that they are ready to be rsync'd to the device
@@ -59,20 +60,40 @@ export ANDROID_NDK="$ANDROID_HOME/ndk/$android_ndk_version"
 
 cd "$stoic_kotlin_dir"
 
+# TODO: Also need brew install graalvm/tap/graalvm-ce-java17
+GRAALVM_HOME="$(brew info graalvm-ce-java17 | grep 'export JAVA_HOME' | sed -E 's/^ *export JAVA_HOME="(.*)"/\1/')"
+export GRAALVM_HOME
+
+
 # :demo-app:without-sdk is the debug app that's used by default. It needs to be debug so
 # that stoic can attach to it.
-./gradlew --parallel :host:main:assemble :android:plugin-sdk:assemble :android:server:injected:dexJar :android:main:dexJar :demo-plugin:helloworld:dexJar :demo-plugin:appexitinfo:dexJar :demo-plugin:breakpoint:dexJar :demo-plugin:crasher:dexJar :demo-plugin:testsuite:dexJar :demo-app:without-sdk:assembleDebug
+./gradlew --parallel \
+  :host:main:assemble \
+  :host:main:nativeCompile \
+  :android:plugin-sdk:assemble \
+  :android:server:injected:dexJar \
+  :android:main:dexJar \
+  :demo-plugin:helloworld:dexJar \
+  :demo-plugin:appexitinfo:dexJar \
+  :demo-plugin:breakpoint:dexJar \
+  :demo-plugin:crasher:dexJar \
+  :demo-plugin:testsuite:dexJar \
+  :demo-app:without-sdk:assembleDebug
+
 cp host/main/build/libs/main.jar "$stoic_release_dir"/jar/stoic-host-main.jar
+cp host/main/build/native/nativeCompile/stoic "$stoic_release_dir"/bin/
 cp android/plugin-sdk/build/libs/plugin-sdk.jar "$stoic_release_dir"/jar/stoic-android-plugin-sdk.jar
 cp android/plugin-sdk/build/libs/plugin-sdk-sources.jar "$stoic_release_dir"/jar/stoic-android-plugin-sdk-sources.jar
 cp android/server/injected/build/libs/injected.dex.jar "$stoic_core_sync_dir/stoic/android-server-injected.dex.jar"
 cp android/main/build/libs/main.dex.jar "$stoic_core_sync_dir/stoic/android-main.dex.jar"
-cp demo-plugin/appexitinfo/build/libs/appexitinfo.dex.jar "$stoic_core_sync_dir/plugins/appexitinfo.dex.jar"
-cp demo-plugin/breakpoint/build/libs/breakpoint.dex.jar "$stoic_core_sync_dir/plugins/breakpoint.dex.jar"
-cp demo-plugin/crasher/build/libs/crasher.dex.jar "$stoic_core_sync_dir/plugins/crasher.dex.jar"
-cp demo-plugin/helloworld/build/libs/helloworld.dex.jar "$stoic_core_sync_dir/plugins/helloworld.dex.jar"
-cp demo-plugin/testsuite/build/libs/testsuite.dex.jar "$stoic_core_sync_dir/plugins/testsuite.dex.jar"
 cp demo-app/without-sdk/build/outputs/apk/debug/without-sdk-debug.apk "$stoic_core_sync_dir/apk/demo-app-without-sdk-debug.apk"
+
+plugins_dir="$stoic_core_sync_dir/plugins"
+cp demo-plugin/appexitinfo/build/libs/appexitinfo.dex.jar "$plugins_dir"/
+cp demo-plugin/breakpoint/build/libs/breakpoint.dex.jar "$plugins_dir"/
+cp demo-plugin/crasher/build/libs/crasher.dex.jar "$plugins_dir"/
+cp demo-plugin/helloworld/build/libs/helloworld.dex.jar "$plugins_dir"/
+cp demo-plugin/testsuite/build/libs/testsuite.dex.jar "$plugins_dir"/
 
 cd "$stoic_dir/native"
 make -j16 all
@@ -105,16 +126,16 @@ if [ -z "$stoic_path" ]; then
     >&2 echo "WARNING: stoic is missing from your PATH. Next, please run:"
     >&2 echo
     >&2 echo "    echo export PATH=\$PATH:$stoic_dir/out/rel/bin >> $config_file && source $config_file"
-    >&2 echo "    stoic setup"
+    >&2 echo "    stoic tool setup"
     >&2 echo
 elif [ "$stoic_path" != "$stoic_dir/out/rel/bin/stoic" ]; then
     >&2 echo "WARNING: Your PATH is currently including stoic from: $stoic_path"
     >&2 echo "The version you just built is in \`$stoic_dir/out/rel/bin\`"
-    >&2 echo "Next, please run: \`$stoic_dir/out/rel/bin/stoic setup\`"
+    >&2 echo "Next, please run: \`$stoic_dir/out/rel/bin/stoic tool setup\`"
     >&2 echo
 else
     >&2 echo "Next, please run:"
     >&2 echo
-    >&2 echo "    stoic setup"
+    >&2 echo "    stoic tool setup"
     >&2 echo
 fi

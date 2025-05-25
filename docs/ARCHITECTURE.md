@@ -85,11 +85,11 @@ With additional effort, Stoic could support running plugins:
 5. On remote systems (via SSH)
 6. In iOS apps
 
-## Stoic shell
+## stoic tool shell
 
 Somewhat accidentally, Stoic also syncs a set of utilities and configuration
-available whenever you shell into an existing system (`stoic shell`). This is
-only provided because stoic needs that internally, and it was easy to build
+available whenever you shell into an existing system (`stoic tool shell`). This
+is only provided because stoic needs that internally, and it was easy to build
 on-top of rsync. 
 
 ## Injection
@@ -106,12 +106,19 @@ cat stoic-jvmti.so | run-as com.example sh -c 'cat > stoic/stoic-jvmti.so'
 
 ## Bidirectional communication
 
-Stoic establishes bidirectional communication via a combination of Unix Domain
-Sockets and possibly `adb shell` (if the client is not running directly on the
-Android device). As with injection, Stoic makes careful use of `run-as` to
-allow it to work on non-rooted devices. Android will not allow the shell user
-to directly connect to a Unix Domain Socket owned by a package (or vice versa),
-so instead Stoic connects with:
+Stoic establishes bidirectional communication via Unix Domain Sockets. As with
+injection, Stoic makes careful use of `run-as` to allow it to work on
+non-rooted devices.
+
+Android will not allow the shell user to directly connect to a Unix Domain
+Socket owned by a package (or vice versa), so instead Stoic connects with:
 ```
 run-as com.example socat - ABSTRACT-CONNECT://...
+```
+
+When connecting from your laptop, stoic uses a fast-path - forwarding a port to
+the unix domain socket. This works without any `run-as` tricks. This way we can
+connect directly to the server without going through `adb shell`.
+```
+adb forward tcp:0 localabstract:/stoic/...
 ```

@@ -47,7 +47,8 @@ import java.util.concurrent.TimeUnit
 val seLinuxViolationDetector = SELinuxViolationDetector()
 
 fun main(args: Array<String>) {
-  logVerbose { "start of AndroidMain.main" }
+  // minLogLevel isn't set until after we parse args, so we log this to logcat
+  Log.i("stoic", "start of AndroidMain.main")
 
   val exitCode = try {
     wrappedMain(args)
@@ -83,13 +84,16 @@ fun main(args: Array<String>) {
 fun wrappedMain(rawArgs: Array<String>): Int {
   minLogLevel = WARN
 
-  Log.i("stoic", "hallo from wrappedMain")
 
   val mainParsedArgs = MainParsedArgs.parse(rawArgs)
   val args = PluginParsedArgs.parse(mainParsedArgs)
+
+  // minLogLevel is now set
+  logInfo { "start of AndroidMain" }
+
   val pkg = args.pkg
-  if (mainParsedArgs.command == "shell") {
-    throw PithyException("stoic shell from Android not yet supported")
+  if (mainParsedArgs.command == "tool") {
+    throw PithyException("stoic tool from Android not yet supported")
   }
 
   val matches = runCommand(listOf("pm", "list", "package", pkg)).split("\n")
@@ -115,6 +119,9 @@ fun wrappedMain(rawArgs: Array<String>): Int {
     if (!args.restartApp) {
       try {
         return fastPath(pluginDexJar, args)
+      } catch (e: PithyException) {
+        // PithyException will be caught at the outermost level
+        throw e
       } catch (e: Exception) {
         logInfo { "Plugin fast-path failed. Falling back to plugin slow-path." }
         logDebug { e.stackTraceToString() }
@@ -272,7 +279,7 @@ private fun startPkg(pkg: String): String {
     i += 1
     try {
       val pid = runCommand(listOf("pidof", pkg))
-      logDebug { "$pkg is running: pid=$pid" }
+      logInfo { "$pkg is running: pid=$pid" }
       return pid
     } catch (e: Exception) {
       logDebug { "$pkg not yet running, sleeping 10ms..." }
@@ -294,6 +301,7 @@ private fun startPkg(pkg: String): String {
 private fun monkey(pkg: String) {
   // We specify `--pct-syskeys 0` to work on emulators without physical keys
   // See https://stackoverflow.com/a/46935037 for details
+  logInfo { "starting $pkg via monkey" }
   runCommand(
     listOf("monkey", "--pct-syskeys", "0", "-p", pkg, "1"),
     redirectOutputAndError = Redirect.to(File("/dev/null"))
@@ -333,6 +341,7 @@ private fun slowPath(pluginDexJar: String?, args: PluginParsedArgs): Int {
     logDebug { "pkgDir=$pkgDir" }
 
     val androidPkgPid = if (args.restartApp) {
+      logInfo { "am force-stop $pkg" }
       runCommand(listOf("am", "force-stop", pkg))
       startPkg(pkg)
     } else {
@@ -498,6 +507,7 @@ private fun startAndroidServer(
   // Monitor logcat from this point forward
   val pb = ProcessBuilder(listOf("logcat", "-T", "1", "--pid", androidPkgPid, "stoic:v *:w"))
   val logcatProcess = pb.start()
+  logInfo { "am attach-agent $pkg $pkgSo=$pkgStoicDir" }
   try {
     // There is a race condition here. I started a socat server above asynchronously
     // If it hasn't started listening by the time the agent attaches, then there will be a problem

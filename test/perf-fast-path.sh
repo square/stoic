@@ -12,7 +12,7 @@ _android_serial
 cd "$stoic_dir/out/rel/bin"
 
 # warm
-./stoic helloworld
+./stoic helloworld >/dev/null
 
 echo "From laptop:"
 time sh << 'EOF'
@@ -23,6 +23,6 @@ EOF
 
 echo "From device:"
 
-stoic shell -T << 'EOF'
+./stoic tool shell -T << 'EOF'
 time sh -c 'for x in 0 1 2 3 4 5 6 7 8 9; do stoic helloworld; done'
 EOF
