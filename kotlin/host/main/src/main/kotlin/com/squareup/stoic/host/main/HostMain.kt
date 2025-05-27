@@ -2,6 +2,8 @@ package com.squareup.stoic.host.main
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.CliktError
+import com.github.ajalt.clikt.core.Context
+import com.github.ajalt.clikt.core.CoreCliktCommand
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.main
 import com.github.ajalt.clikt.core.subcommands
@@ -34,6 +36,7 @@ import com.squareup.stoic.common.runCommand
 import com.squareup.stoic.common.serverSocketName
 import com.squareup.stoic.common.stdout
 import com.squareup.stoic.common.stoicDeviceDevJarDir
+import com.squareup.stoic.common.stoicDeviceSyncDir
 import com.squareup.stoic.common.waitFor
 import java.io.File
 
@@ -58,50 +61,148 @@ lateinit var stoicHostCoreSyncDir: String
 
 lateinit var adbSerial: String
 
-class Entrypoint : CliktCommand(name = "stoic") {
+class Entrypoint : CliktCommand(
+  name = "stoic",
+) {
   init {
     context { allowInterspersedArgs = false }
-    versionOption(StoicProperties.STOIC_VERSION_NAME)
+    versionOption(
+      version = StoicProperties.STOIC_VERSION_NAME,
+      names = setOf("-v", "--version")
+    )
+  }
+
+  override val printHelpOnEmptyArgs = true
+  override fun help(context: Context): String {
+    return """
+      Stoic communicates with processes running on Android devices.
+
+      Stoic will attempt to attach to a process via jvmti and establish a unix-domain-socket server.
+      If successful, stoic will communicate to the server to request that the specified plugin run,
+      with any arguments that follow, connecting stdin/stdout/stderr between the plugin and the
+      stoic process.
+
+      e.g. stoic helloworld "this is one arg" "this is a second arg"
+
+      Special functionality is available via `stoic tool <tool-name> <tool-args>` - for details, see
+      `stoic tool --help`
+    """.trimIndent()
   }
 
   // Track which options were explicitly set
   private val specifiedOptions = mutableSetOf<String>()
 
-  fun RawOption.trackableFlag(name: String): OptionDelegate<Boolean> {
+  fun verifyAllowedOption(vararg allowedOptions: String) {
+    specifiedOptions.forEach {
+      if (it !in allowedOptions) {
+        throw CliktError("--$it not allowed in this context")
+      }
+    }
+  }
+
+  fun RawOption.trackableFlag(): OptionDelegate<Boolean> {
+    val longestName = names.maxByOrNull { it.length }!!
     return nullableFlag()
       .transformValues(0..0) {
-        specifiedOptions += name
+        specifiedOptions += longestName
         true
       }
       .default(false)
   }
 
-  fun RawOption.trackableOption(
-    name: String,
-  ): OptionWithValues<String?, String, String> {
+  fun RawOption.trackableOption(): OptionWithValues<String?, String, String> {
+    val longestName = names.maxByOrNull { it.length }!!
     return convert {
-      specifiedOptions += name
+      specifiedOptions += longestName
       it
     }
   }
 
-  val verbose by option("--verbose").trackableFlag("verbose")
-  val debug by option("--debug").trackableFlag("debug")
-  val info by option("--info").trackableFlag("info")
-  val restartApp by option("--restart", "--restart-app", "-r").trackableFlag("restart-app")
-  val noStartIfNeeded by option("--no-start-if-needed").trackableFlag("no-start-if-needed")
-  val androidSerial by option("--android-serial", "--serial", "-s").trackableOption("android-serial")
-  val pkg by option("--package", "--pkg", "-p")
-    .trackableOption("package")
-    .default("com.squareup.stoic.demoapp.withoutsdk")
-  val env by option("--env", help = "Environment key=value pairs")
-    .pair()
-    .multiple()
+  val verbose by option(
+    "--verbose",
+    help = "enable verbose logging"
+  ).trackableFlag()
+  val debug by option(
+    "--debug",
+    help = "enable debug logging"
+  ).trackableFlag()
+  val info by option(
+    "--info",
+    help = "enable info logging"
+  ).trackableFlag()
 
-  val subcommand by argument(name = "subcommand")
-  val subcommandArgs by argument().multiple()
+  val restartApp by option(
+    "--restart",
+    "--restart-app",
+    "-r",
+    help = "if it's already running, force restart the specified package"
+  ).trackableFlag()
+  val noStartIfNeeded by option(
+    "--no-start-if-needed",
+    help = """
+      by default, stoic will start the specified package if it's not already running - this option
+      disables that behavior
+    """.trimIndent()
+  ).trackableFlag()
+
+  val androidSerial by option(
+    "--android-serial",
+    "--serial",
+    "-s",
+    help = "Use device with given serial (overrides \$ANDROID_SERIAL)"
+  ).trackableOption()
+
+  val pkg by option(
+    "--package",
+    "--pkg",
+    "-p",
+    help = "Specify the package of the process to connect to"
+  ).trackableOption().default("com.squareup.stoic.demoapp.withoutsdk")
+
+  val env by option(
+    "--env",
+    help = "Environment key=value pairs - plugins access these via stoic.getenv(...)"
+  ).trackableOption().pair().multiple()
+
+  val isDemo by option(
+    "--demo",
+    help = "limit plugin resolution to demo plugins"
+  ).trackableFlag()
+  val isBuiltin by option(
+    "--builtin",
+    "--built-in",
+    help = "limit plugin resolution to builtin plugins"
+  ).trackableFlag()
+  val isUser by option(
+    "--user",
+    "--usr",
+    help = "limit plugin resolution to user plugins"
+  ).trackableFlag()
+
+  val subcommand by argument(name = "plugin")
+  val subcommandArgs by argument(name = "plugin-args").multiple()
+
+  var demoAllowed = false
+  var builtinAllowed = false
+  var userAllowed = false
 
   override fun run() {
+    if (isDemo) {
+      demoAllowed = true
+    } else if (isBuiltin) {
+      builtinAllowed = true
+    } else if (isUser) {
+      userAllowed = true
+    } else {
+      demoAllowed = true
+      builtinAllowed = true
+      userAllowed = true
+    }
+
+    if (restartApp && noStartIfNeeded) {
+      throw CliktError("--restart-app and --no-start-if-needed are mutually exclusive")
+    }
+
     if (listOf(verbose, debug, info).count { it } > 1) {
       throw CliktError("--verbose and --debug are mutually exclusive")
     }
@@ -119,19 +220,13 @@ class Entrypoint : CliktCommand(name = "stoic") {
 
     logDebug { "isGraal=$isGraal" }
 
-    resolveAdbSerial(androidSerial)
-
     when (subcommand) {
       "tool" -> {
-        // Verify options
-        // TODO: better help message
-        specifiedOptions.forEach {
-          check(it in listOf("verbose", "debug"))
-        }
-
         runTool(this)
       }
       else -> {
+        resolveAdbSerial(androidSerial)
+
         val exitCode = runPlugin(this)
         if (exitCode != 0) {
           throw PithyException(null, exitCode)
@@ -141,8 +236,23 @@ class Entrypoint : CliktCommand(name = "stoic") {
   }
 }
 
-class ShellCommand : CliktCommand(name = "shell") {
+class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "shell") {
   init { context { allowInterspersedArgs = false } }
+  override fun help(context: Context): String {
+    return """
+      like `adb shell` but syncs directories and initializes the shell env
+ 
+      If it exists, $stoicHostCoreSyncDir will be synced to $stoicDeviceSyncDir
+      If it exists, $stoicHostUsrConfigDir/shell.sh will be run to start the shell. You may
+      reference the following environment variables in your shell.sh:
+ 
+        STOIC_DEVICE_SYNC_DIR (this will be set to $stoicDeviceSyncDir)
+        STOIC_TTY_OPTION (this will be set to one of -t/-tt/-T depending on the invocation of
+        `stoic tool shell`)
+
+    """.trimIndent()
+  }
+
   val shellArgs by argument().multiple()
 
   val tty by option("--tty", "-t").flag()
@@ -150,6 +260,9 @@ class ShellCommand : CliktCommand(name = "shell") {
   val disableTty by option("--disable-tty", "-T").flag()
 
   override fun run() {
+    entrypoint.verifyAllowedOption("--verbose", "--debug", "--android-serial")
+    resolveAdbSerial(entrypoint.androidSerial)
+
     if (listOf(tty, forceTty, disableTty).count { it } > 1) {
       throw CliktError("-t, -tt, and -T are mutually exclusive")
     }
@@ -174,6 +287,7 @@ class ShellCommand : CliktCommand(name = "shell") {
       runCommand(
         listOf("sh", "$stoicHostUsrConfigDir/shell.sh") + shellArgs,
         envOverrides = mapOf(
+          "ANDROID_SERIAL" to adbSerial,
           "STOIC_TTY_OPTION" to ttyOption,
           "STOIC_DEVICE_SYNC_DIR" to stoicDeviceSyncDir,
         ),
@@ -188,24 +302,48 @@ class ShellCommand : CliktCommand(name = "shell") {
   }
 }
 
-class RsyncCommand : CliktCommand(name = "rsync") {
-  init { context { allowInterspersedArgs = false } }
+class RsyncCommand(val entrypoint: Entrypoint) : CoreCliktCommand(name = "rsync") {
+  init {
+    context {
+      allowInterspersedArgs = false
+    }
+  }
   override val treatUnknownOptionsAsArgs = true
+  override fun help(context: Context): String {
+    return """
+      rsync to/from an Android device over adb, where Android paths are prefixed with `adb:`
 
-  val androidSerial by option("--android-serial")
+      `stoic tool rsync` is powered by actual rsync, so it supports the same options. Run
+      `rsync --help` to see details.
+
+      e.g. to sync a hypothetical docs directory from your laptop to your Android device:
+      `stoic tool rsync --archive docs/ adb:/data/local/tmp/docs/`
+
+      e.g. to sync a hypothetical docs directory from your Android device to your laptop:
+      `stoic tool rsync --archive adb:/data/local/tmp/docs/ docs/`
+    """.trimIndent()
+  }
+
   val rsyncArgs by argument().multiple()
 
   override fun run() {
-    resolveAdbSerial(androidSerial)
+    entrypoint.verifyAllowedOption("--verbose", "--debug", "--android-serial")
+    resolveAdbSerial(entrypoint.androidSerial)
 
     arsync(*rsyncArgs.toTypedArray())
   }
 }
 
-class SetupCommand : CliktCommand(name = "setup") {
+class SetupCommand(val entrypoint: Entrypoint) : CliktCommand(name = "setup") {
+  override fun help(context: Context): String {
+    return """
+      initializes ~/.config/stoic
+    """.trimIndent()
+  }
+
   override fun run() {
-    // StoicProperties is generated - need to run `./gradlew :generateStoicVersion` and sync
-    // in order for AndroidStudio to recognize it.
+    entrypoint.verifyAllowedOption("--verbose", "--debug")
+
     val buildToolsVersion = StoicProperties.ANDROID_BUILD_TOOLS_VERSION
     val targetApiLevel = StoicProperties.ANDROID_TARGET_SDK
 
@@ -252,7 +390,16 @@ class SetupCommand : CliktCommand(name = "setup") {
 class ToolCommand : CliktCommand(name = "stoic tool") {
   init {
     context { allowInterspersedArgs = false }
-    versionOption(StoicProperties.STOIC_VERSION_NAME)
+    versionOption(
+      version = StoicProperties.STOIC_VERSION_NAME,
+      names = setOf("-v", "--version")
+    )
+  }
+
+  override fun help(context: Context): String {
+    return """
+      Run a special command - for details, see: `stoic tool <command-name> --help`
+    """.trimIndent()
   }
 
   override fun run() {
@@ -277,7 +424,9 @@ fun main(rawArgs: Array<String>) {
   stoicHostScriptDir = "$stoicReleaseDir/script"
   stoicHostCoreSyncDir = "$stoicReleaseDir/sync"
 
-  stoicHostUsrConfigDir = System.getenv("STOIC_CONFIG") ?: "${System.getenv("HOME")}/.config/stoic"
+  stoicHostUsrConfigDir = System.getenv("STOIC_CONFIG").let {
+    if (it.isNullOrBlank()) { "${System.getenv("HOME")}/.config/stoic" } else { it }
+  }
   stoicHostUsrSyncDir = "$stoicHostUsrConfigDir/sync"
   stoicHostUsrPluginSrcDir = "$stoicHostUsrConfigDir/plugin"
 
@@ -304,14 +453,14 @@ fun main(rawArgs: Array<String>) {
 fun runTool(entrypoint: Entrypoint) {
   ToolCommand()
     .subcommands(
-      ShellCommand(),
-      RsyncCommand(),
-      SetupCommand(),
+      ShellCommand(entrypoint),
+      RsyncCommand(entrypoint),
+      SetupCommand(entrypoint),
     ).main(entrypoint.subcommandArgs)
 }
 
 fun runPlugin(entrypoint: Entrypoint): Int {
-  val pluginJar = resolvePluginModule(entrypoint.subcommand)
+  val pluginJar = resolvePluginModule(entrypoint)
 
   if (!entrypoint.restartApp) {
     // `adb forward`-powered fast path
@@ -463,36 +612,50 @@ fun shellEscapeCmd(cmdArgs: List<String>): String {
   }
 }
 
-fun resolvePluginModule(pluginModule: String): String? {
+fun resolvePluginModule(entrypoint: Entrypoint): String? {
+  val pluginModule = entrypoint.subcommand
   logDebug { "Attempting to resolve '$pluginModule'" }
-  val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginModule"
-  val pluginDexJar = "$pluginModule.dex.jar"
-  if (File(usrPluginSrcDir).exists()) {
-    logBlock(LogLevel.DEBUG, { "Building $usrPluginSrcDir/$pluginModule" }) {
-      // TODO: In the future, we should allow building a simple jar and stoic handles packaging it
-      // into a dex.jar, as needed
-      ProcessBuilder("./gradlew", "--quiet", ":$pluginModule:dexJar")
-        .inheritIO()
-        .directory(File(stoicHostUsrPluginSrcDir))
-        .waitFor(0)
-      adbProcessBuilder("shell", "mkdir", "-p", stoicDeviceDevJarDir)
+  if (listOf(entrypoint.isDemo, entrypoint.isBuiltin, entrypoint.isUser).count { it } > 1) {
+    throw PithyException("At most one of --demo/--builtin/--user may be specified")
+  }
 
-      return "$stoicHostUsrPluginSrcDir/$pluginModule/build/libs/$pluginDexJar"
+  val pluginDexJar = "$pluginModule.dex.jar"
+  if (entrypoint.userAllowed) {
+    val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginModule"
+    if (File(usrPluginSrcDir).exists()) {
+      logBlock(LogLevel.DEBUG, { "Building $usrPluginSrcDir/$pluginModule" }) {
+        // TODO: In the future, we should allow building a simple jar and stoic handles packaging it
+        // into a dex.jar, as needed
+        ProcessBuilder("./gradlew", "--quiet", ":$pluginModule:dexJar")
+          .inheritIO()
+          .directory(File(stoicHostUsrPluginSrcDir))
+          .waitFor(0)
+        adbProcessBuilder("shell", "mkdir", "-p", stoicDeviceDevJarDir)
+
+        return "$stoicHostUsrPluginSrcDir/$pluginModule/build/libs/$pluginDexJar"
+      }
+    }
+
+    logDebug { "$usrPluginSrcDir does not exist - falling back to prebuilt locations." }
+
+    val usrPluginDexJar = File("$stoicHostUsrSyncDir/plugins/$pluginDexJar")
+    if (usrPluginDexJar.exists()) {
+      return usrPluginDexJar.canonicalPath
     }
   }
 
-  logDebug { "$usrPluginSrcDir does not exist - falling back to prebuilt locations." }
-
-  val usrPluginDexJar = File("$stoicHostUsrSyncDir/plugins/$pluginDexJar")
-  if (usrPluginDexJar.exists()) {
-    return usrPluginDexJar.canonicalPath
-  }
-  val corePluginDexJar = File("$stoicHostCoreSyncDir/plugins/$pluginDexJar")
-  if (corePluginDexJar.exists()) {
-    return corePluginDexJar.canonicalPath
+  if (entrypoint.demoAllowed) {
+    val corePluginDexJar = File("$stoicHostCoreSyncDir/plugins/$pluginDexJar")
+    if (corePluginDexJar.exists()) {
+      return corePluginDexJar.canonicalPath
+    }
   }
 
-  return null
+  if (entrypoint.builtinAllowed) {
+    return null
+  }
+
+  throw PithyException("plugin $pluginModule not found.")
 }
 
 
