@@ -42,17 +42,41 @@ import kotlin.concurrent.thread
 
 class StoicPlugin(
   private val stoicDir: String,
-  private val builtinPlugins: Map<String, StoicNamedPlugin>,
+  extraPlugins: Map<String, StoicNamedPlugin>,
   private val socketInputStream: InputStream,
   private val socketOutputStream: OutputStream,
 ) {
   private val writer = MessageWriter(DataOutputStream(socketOutputStream))
   private val reader = MessageReader(DataInputStream(socketInputStream))
   private var nextMessage: Any? = null
+  private val builtinPlugins: Map<String, StoicNamedPlugin>
 
   init {
     logVerbose { "constructed writer from ${writer.dataOutputStream} (underlying ${socketOutputStream})" }
     logVerbose { "constructed reader from ${reader.dataInputStream} (underlying ${socketInputStream})" }
+    val defaultPlugins = mapOf(
+      "stoic-status" to object : StoicNamedPlugin {
+        override fun run(args: List<String>): Int {
+          stoic.stdout.println(
+            """
+              protocol-version: $STOIC_PROTOCOL_VERSION
+              connected-via: ContentProvider
+              builtin-plugins: ${builtinPlugins.keys}
+            """.trimIndent()
+          )
+
+          return 0
+        }
+      },
+      "stoic-list" to object : StoicNamedPlugin {
+        override fun run(args: List<String>): Int {
+          builtinPlugins.keys.forEach { stoic.stdout.println(it) }
+
+          return 0
+        }
+      }
+    )
+    builtinPlugins = defaultPlugins + extraPlugins
   }
 
   fun peekMessage(): Any {
@@ -261,7 +285,7 @@ class StoicPlugin(
     writer.writeMessage(Succeeded("Load plugin succeeded"))
   }
 
-  fun pluginMain(pluginId: Int) {
+  fun pluginMain() {
     Log.i("stoic", "pluginMain")
     try {
       handleVersion()

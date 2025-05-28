@@ -40,7 +40,6 @@ private fun startServer(stoicDir: String) {
     // TODO: fix hack - get the pkg from something other than the dir
     val pkg = File(stoicDir).parentFile!!.name
 
-    var nextPluginId = 1
     val server = LocalServerSocket(serverSocketName(pkg))
     val name = server.localSocketAddress.name
     val namespace = server.localSocketAddress.namespace
@@ -70,7 +69,7 @@ private fun startServer(stoicDir: String) {
       val socket = server.accept()
       thread (name = "stoic-plugin") {
         try {
-          StoicPlugin(stoicDir, mapOf(), socket.inputStream, socket.outputStream).pluginMain(nextPluginId++)
+          StoicPlugin(stoicDir, mapOf(), socket.inputStream, socket.outputStream).pluginMain()
         } catch (e: Throwable) {
           Log.e("stoic", "unexpected", e)
 

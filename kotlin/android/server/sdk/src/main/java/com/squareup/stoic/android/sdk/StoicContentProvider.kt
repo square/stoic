@@ -60,26 +60,12 @@ class StoicContentProvider : ContentProvider() {
           val clientSocket = socketPair[1]
           val stoicDir = context!!.getDir("stoic", Context.MODE_PRIVATE).absolutePath
 
-          val pluginId = 1 // TODO: this needs to increment
           thread {
             ParcelFileDescriptor.AutoCloseOutputStream(serverSocket).use { output ->
               ParcelFileDescriptor.AutoCloseInputStream(serverSocket).use { input ->
+                // TODO: provide a way for apps to define builtin plugins
                 var builtinPlugins = mapOf<String, StoicNamedPlugin>()
-                builtinPlugins = mapOf(
-                  "stoic-status" to object : StoicNamedPlugin {
-                    override fun run(args: List<String>): Int {
-                      stoic.stdout.println(
-                        """
-                        protocol-version: $STOIC_PROTOCOL_VERSION
-                        connected-via: ContentProvider
-                        builtin-plugins: ${builtinPlugins.keys}
-                      """.trimIndent()
-                      )
 
-                      return 0
-                    }
-                  }
-                )
                 val pluginServer = StoicPlugin(
                   stoicDir,
                   builtinPlugins,
@@ -87,7 +73,7 @@ class StoicContentProvider : ContentProvider() {
                   output,
                 )
 
-                pluginServer.pluginMain(pluginId)
+                pluginServer.pluginMain()
               }
             }
           }
