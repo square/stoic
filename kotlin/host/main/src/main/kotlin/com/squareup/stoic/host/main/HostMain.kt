@@ -39,15 +39,14 @@ import com.squareup.stoic.common.stoicDeviceDevJarDir
 import com.squareup.stoic.common.stoicDeviceSyncDir
 import com.squareup.stoic.common.waitFor
 import java.io.File
+import java.io.FileFilter
+import java.io.FilenameFilter
 
 import java.lang.ProcessBuilder.Redirect
 import java.net.Socket
 import java.nio.file.Paths
 import kotlin.system.exitProcess
 
-
-const val stoicDeviceDir = "/data/local/tmp/stoic"
-const val stoicDeviceSyncDir = "$stoicDeviceDir/sync"
 
 var isGraal: Boolean = false
 
@@ -186,7 +185,7 @@ class Entrypoint : CliktCommand(
   var builtinAllowed = false
   var userAllowed = false
 
-  override fun run() {
+  fun resolveAllowed() {
     if (isDemo) {
       demoAllowed = true
     } else if (isBuiltin) {
@@ -198,6 +197,10 @@ class Entrypoint : CliktCommand(
       builtinAllowed = true
       userAllowed = true
     }
+  }
+
+  override fun run() {
+    resolveAllowed()
 
     if (restartApp && noStartIfNeeded) {
       throw CliktError("--restart-app and --no-start-if-needed are mutually exclusive")
@@ -407,6 +410,44 @@ class ToolCommand : CliktCommand(name = "stoic tool") {
   }
 }
 
+class ListCommand(val entrypoint: Entrypoint) : CliktCommand(name = "list") {
+  override fun help(context: Context): String {
+    return """
+      List available stoic plugins
+    """.trimIndent()
+  }
+
+  override fun run() {
+    // TODO: need a way to identify which directories within ~/.config/stoic/plugin are actually
+    //   plugins
+
+    // TODO: Invoke builtin stoic-list to get list of builtin plugins
+
+    val dexJarFilter = object: FileFilter {
+      override fun accept(file: File): Boolean {
+        return file.isFile && file.name.endsWith(".dex.jar")
+      }
+    }
+
+    entrypoint.resolveAllowed()
+
+    if (entrypoint.userAllowed) {
+      val usrPrebuilts = File("$stoicHostUsrSyncDir/plugins").listFiles(dexJarFilter)!!
+      usrPrebuilts.forEach {
+        println(it.name.removeSuffix(".dex.jar"))
+      }
+    }
+
+    if (entrypoint.demoAllowed) {
+      val demoPrebuilts = File("$stoicHostCoreSyncDir/plugins").listFiles(dexJarFilter)!!
+      demoPrebuilts.forEach {
+        println(it.name.removeSuffix(".dex.jar"))
+      }
+    }
+  }
+}
+
+
 fun main(rawArgs: Array<String>) {
   isGraal = System.getProperty("org.graalvm.nativeimage.imagecode") != null
   stoicReleaseDir = if (isGraal) {
@@ -456,6 +497,7 @@ fun runTool(entrypoint: Entrypoint) {
       ShellCommand(entrypoint),
       RsyncCommand(entrypoint),
       SetupCommand(entrypoint),
+      ListCommand(entrypoint),
     ).main(entrypoint.subcommandArgs)
 }
 
