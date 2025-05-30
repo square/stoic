@@ -57,7 +57,12 @@ class PluginClient(
 
     // Need to load plugin
     if (pluginDexJar == null) {
-      throw PithyException("Plugin not found: ${pluginParsedArgs.pluginModule}")
+      throw PithyException(
+        """
+          Plugin not found: ${pluginParsedArgs.pluginModule}
+          To list available plugins: stoic tool list
+        """.trimIndent()
+      )
     }
 
     val loadPluginPseudoFd = writer.openPseudoFdForWriting()

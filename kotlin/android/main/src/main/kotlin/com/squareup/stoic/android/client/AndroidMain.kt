@@ -315,10 +315,11 @@ private fun fastPath(pluginDexJar: String?, args: PluginParsedArgs): Int {
   val pid = ProcessBuilder("pidof", pkg).stdout(expectedExitCode = null)
   val pb = ProcessBuilder(runAsCompat, pkg, pkgSocat, "-", "ABSTRACT-CONNECT:$serverAddress")
 
-  // If our log level is DEBUG (or VERBOSE) then we show stderr. Otherwise stderr will by default
-  // go to pipe and not be seen at all.
+  // If our log level is DEBUG (or VERBOSE) then we show stderr.
   if (minLogLevel <= DEBUG) {
     pb.redirectError(Redirect.INHERIT)
+  } else {
+    pb.redirectError(File("/dev/null"))
   }
 
   return attemptPlugin(pluginDexJar, args, pid, pb.start())
@@ -373,15 +374,24 @@ private fun slowPath(pluginDexJar: String?, args: PluginParsedArgs): Int {
         listOf(runAsCompat, pkg, pkgSocat) + socatVerbosity + listOf("-", "ABSTRACT-CONNECT:$serverAddress"),
       )
 
-      // We don't expect any errors this time around
-      builder.redirectError(Redirect.INHERIT)
+      // If our log level is DEBUG (or VERBOSE) then we show stderr.
+      if (minLogLevel <= DEBUG) {
+        builder.redirectError(Redirect.INHERIT)
+      } else {
+        builder.redirectError(File("/dev/null"))
+      }
 
       logDebug { "input redirect: ${builder.redirectInput()}" }
       logDebug { "output redirect: ${builder.redirectOutput()}" }
       process = builder.start()
       return attemptPlugin(pluginDexJar, args, androidPkgPid, process)
     } catch (e: Throwable) {
-      logError { e.stackTraceToString() }
+      if (e is PithyException) {
+        logDebug { e.stackTraceToString() }
+      } else {
+        logError { e.stackTraceToString() }
+      }
+
       throw e
     } finally {
       process?.destroyForcibly()
