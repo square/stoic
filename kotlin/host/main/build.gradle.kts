@@ -18,6 +18,7 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation(project(":common"))
     implementation(project(":bridge"))
+    implementation(project(":internal:tool:d8-preserve-manifest"))
 }
 
 tasks.withType<KotlinCompile> {

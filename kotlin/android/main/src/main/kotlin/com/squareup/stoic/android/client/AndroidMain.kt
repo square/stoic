@@ -29,7 +29,6 @@ import com.squareup.stoic.common.runAsCompat
 import com.squareup.stoic.common.runCommand
 import com.squareup.stoic.common.serverSocketName
 import com.squareup.stoic.common.stdout
-import com.squareup.stoic.common.stoicDeviceDevJarDir
 import com.squareup.stoic.common.stoicDeviceSyncDir
 import com.squareup.stoic.common.stoicDeviceSyncPluginDir
 import com.squareup.stoic.common.stoicDemoAppWithoutSdk
@@ -257,11 +256,6 @@ fun resolveCallingPackage(): String? {
 
 fun resolveDexJar(pluginParsedArgs: PluginParsedArgs): String? {
   val pluginName = pluginParsedArgs.pluginModule
-  val devDexJar = "$stoicDeviceDevJarDir/$pluginName.dex.jar"
-  if (File(devDexJar).exists()) {
-    return devDexJar
-  }
-
   val stagingPluginDexJar = "$stoicDeviceSyncPluginDir/$pluginName.dex.jar"
   if (File(stagingPluginDexJar).exists()) {
     return stagingPluginDexJar

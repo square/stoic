@@ -10,7 +10,6 @@ import java.security.MessageDigest
 const val stoicDeviceDir = "/data/local/tmp/stoic"
 const val stoicDeviceSyncDir = "$stoicDeviceDir/sync"
 const val stoicDeviceSyncPluginDir = "$stoicDeviceSyncDir/plugins"
-const val stoicDeviceDevJarDir = "$stoicDeviceDir/dev_jar"
 const val shebangJarDir = "$stoicDeviceDir/shebang_jar"
 const val stoicDemoAppWithoutSdk = "com.squareup.stoic.demoapp.withoutsdk"
 const val runAsCompat = "$stoicDeviceSyncDir/bin/run-as-compat"

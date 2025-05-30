@@ -35,24 +35,29 @@ import com.squareup.stoic.common.minLogLevel
 import com.squareup.stoic.common.runCommand
 import com.squareup.stoic.common.serverSocketName
 import com.squareup.stoic.common.stdout
-import com.squareup.stoic.common.stoicDeviceDevJarDir
 import com.squareup.stoic.common.stoicDeviceSyncDir
 import com.squareup.stoic.common.waitFor
+import com.squareup.stoic.d8pm.d8PreserveManifest
 import java.io.File
 import java.io.FileFilter
 import java.io.FilenameFilter
 
 import java.lang.ProcessBuilder.Redirect
 import java.net.Socket
+import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.createTempDirectory
 import kotlin.system.exitProcess
 
 
 var isGraal: Boolean = false
 
+// Setup populates th usr dirs
+// TODO: we should publish our SDK jars to maven instead of copying them during setup
 lateinit var stoicHostUsrConfigDir: String
 lateinit var stoicHostUsrSyncDir: String
 lateinit var stoicHostUsrPluginSrcDir: String
+lateinit var stoicHostUsrSdkDir: String
 
 lateinit var stoicReleaseDir: String
 lateinit var stoicHostScriptDir: String
@@ -363,9 +368,9 @@ class SetupCommand(val entrypoint: Entrypoint) : CliktCommand(name = "setup") {
       "$stoicHostUsrConfigDir/")
       .inheritIO().waitFor(0)
 
-    ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoic-android-plugin-sdk.jar", "$stoicHostUsrPluginSrcDir/lib/")
+    ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoic-android-plugin-sdk.jar", "$stoicHostUsrSdkDir/")
       .inheritIO().waitFor(0)
-    ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoic-android-plugin-sdk-sources.jar", "$stoicHostUsrPluginSrcDir/lib/")
+    ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoic-android-plugin-sdk-sources.jar", "$stoicHostUsrSdkDir/")
       .inheritIO().waitFor(0)
 
     println("""
@@ -432,6 +437,11 @@ class ListCommand(val entrypoint: Entrypoint) : CliktCommand(name = "list") {
     entrypoint.resolveAllowed()
 
     if (entrypoint.userAllowed) {
+      val usrSourceDirs = File(stoicHostUsrPluginSrcDir).listFiles()!!
+      usrSourceDirs.forEach {
+        println(it.name)
+      }
+
       val usrPrebuilts = File("$stoicHostUsrSyncDir/plugins").listFiles(dexJarFilter)!!
       usrPrebuilts.forEach {
         println(it.name.removeSuffix(".dex.jar"))
@@ -470,6 +480,7 @@ fun main(rawArgs: Array<String>) {
   }
   stoicHostUsrSyncDir = "$stoicHostUsrConfigDir/sync"
   stoicHostUsrPluginSrcDir = "$stoicHostUsrConfigDir/plugin"
+  stoicHostUsrSdkDir = "$stoicHostUsrConfigDir/sdk"
 
   try {
     Entrypoint().main(rawArgs)
@@ -665,16 +676,18 @@ fun resolvePluginModule(entrypoint: Entrypoint): String? {
   if (entrypoint.userAllowed) {
     val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginModule"
     if (File(usrPluginSrcDir).exists()) {
-      logBlock(LogLevel.DEBUG, { "Building $usrPluginSrcDir/$pluginModule" }) {
-        // TODO: In the future, we should allow building a simple jar and stoic handles packaging it
-        // into a dex.jar, as needed
-        ProcessBuilder("./gradlew", "--quiet", ":$pluginModule:dexJar")
+      logBlock(LogLevel.DEBUG, { "Building $usrPluginSrcDir" }) {
+        val tmpDir = createTempDirectory("stoic-plugin-").toFile()
+        val dstJar = File("$tmpDir/$pluginModule.jar")
+        val dstDexJar = File("$tmpDir/$pluginModule.dex.jar")
+        ProcessBuilder("./build-plugin")
           .inheritIO()
-          .directory(File(stoicHostUsrPluginSrcDir))
+          .directory(File(usrPluginSrcDir))
+          .also { it.environment().put("STOIC_PLUGIN_JAR_OUT", dstJar.absolutePath) }
           .waitFor(0)
-        adbProcessBuilder("shell", "mkdir", "-p", stoicDeviceDevJarDir)
+        d8PreserveManifest(dstJar, dstDexJar, tmpDir)
 
-        return "$stoicHostUsrPluginSrcDir/$pluginModule/build/libs/$pluginDexJar"
+        return dstDexJar.absolutePath
       }
     }
 

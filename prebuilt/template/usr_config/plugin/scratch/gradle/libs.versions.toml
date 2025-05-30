@@ -1,0 +1,9 @@
+[versions]
+kotlin = "2.1.21"
+androidCompileSdk = "35"
+shadow = "8.3.6"
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+application = { id = "application" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

@@ -1,32 +1,33 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
-    kotlin("jvm") version "2.1.21"
-    kotlin("plugin.serialization") version "2.1.21"
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.shadow)
+    alias(libs.plugins.application)
 }
 
 repositories {
     mavenCentral()
 }
 
-val androidSdkPath: String? = System.getenv("ANDROID_HOME")
+application {
+    mainClass.set("MainKt")
+}
+
 dependencies {
-    if (androidSdkPath == null) {
-        throw GradleException("ANDROID_HOME environment variable is not set.")
-    }
-    compileOnly(files("$androidSdkPath/platforms/android-34/android.jar"))
-    compileOnly(files("${rootProject.projectDir}/lib/stoic-android-plugin-sdk.jar"))
+    val androidHome = providers.environmentVariable("ANDROID_HOME").orNull
+        ?: throw GradleException("ANDROID_HOME is not set")
+    val androidCompileSdk = libs.versions.androidCompileSdk.get()
+    val androidJar = "$androidHome/platforms/android-$androidCompileSdk/android.jar"
+    val stoicPluginSdk = "${rootProject.projectDir}/../../sdk/stoic-android-plugin-sdk.jar"
 
     implementation(kotlin("stdlib"))
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    compileOnly(files(stoicPluginSdk))
+    compileOnly(files(androidJar))
 }
 
-tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-}
-
-tasks.jar {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+// isEnableRelocation=true avoids conflicts if we have different
+// versions of the same library in the plugin and in stoic and/or the app we
+// attach to
+tasks.shadowJar {
+    isEnableRelocation = true
+    relocationPrefix = "stoicplugin"
 }
