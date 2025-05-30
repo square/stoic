@@ -109,6 +109,7 @@ fun ensureCleanGitRepo(stoicDir: File) {
   process.waitFor()
 
   if (output.isNotEmpty()) {
+    System.err.println(output)
     System.err.println("The git repository has uncommitted changes or untracked files. Aborting...")
     exitProcess(1)
   }
