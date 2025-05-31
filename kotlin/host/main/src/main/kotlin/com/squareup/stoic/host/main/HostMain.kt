@@ -423,9 +423,6 @@ class ListCommand(val entrypoint: Entrypoint) : CliktCommand(name = "list") {
   }
 
   override fun run() {
-    // TODO: need a way to identify which directories within ~/.config/stoic/plugin are actually
-    //   plugins
-
     // TODO: Invoke builtin stoic-list to get list of builtin plugins
 
     val dexJarFilter = object: FileFilter {
@@ -454,6 +451,51 @@ class ListCommand(val entrypoint: Entrypoint) : CliktCommand(name = "list") {
         println(it.name.removeSuffix(".dex.jar"))
       }
     }
+  }
+}
+
+class NewPluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "new-plugin") {
+  override fun help(context: Context): String {
+    return """
+      Create a new plugin
+    """.trimIndent()
+  }
+
+  val pluginName by argument("name")
+
+  override fun run() {
+    entrypoint.verifyAllowedOption("--verbose", "--debug")
+
+    val pluginNameRegex = Regex("^[A-Za-z0-9_-]+$")
+    if (!pluginName.matches(pluginNameRegex)) {
+      throw PithyException("Plugin name must adhere to regex: ${pluginNameRegex.pattern}")
+    }
+
+    val usrPluginSrcDir = File("$stoicHostUsrPluginSrcDir/$pluginName")
+    val scratchSrcDir = File("$stoicReleaseDir/template/usr_config/plugin/scratch")
+
+    // Copy the scratch template plugin
+    ProcessBuilder(
+      "cp",
+      "-iR",
+      scratchSrcDir.absolutePath,
+      usrPluginSrcDir.absolutePath
+    ).inheritIO().waitFor(0)
+
+    // Replace "scratch" with the name of the plugin
+    check(ProcessBuilder.startPipeline(
+      listOf(
+        ProcessBuilder("grep", "--recursive", "--files-with-matches", "--null", "scratch", ".")
+          .directory(usrPluginSrcDir)
+          .redirectError(Redirect.INHERIT),
+        ProcessBuilder("xargs", "-0", "sed", "-i", "", "s/scratch/$pluginName/g")
+          .directory(usrPluginSrcDir)
+          .inheritIO()
+          .redirectInput(Redirect.PIPE)
+      )
+    ).all { it.waitFor() == 0 })
+
+    System.err.println("New plugin src written to $usrPluginSrcDir")
   }
 }
 
@@ -509,6 +551,7 @@ fun runTool(entrypoint: Entrypoint) {
       RsyncCommand(entrypoint),
       SetupCommand(entrypoint),
       ListCommand(entrypoint),
+      NewPluginCommand(entrypoint),
     ).main(entrypoint.subcommandArgs)
 }
 
@@ -672,23 +715,49 @@ fun resolvePluginModule(entrypoint: Entrypoint): String? {
     throw PithyException("At most one of --demo/--builtin/--user may be specified")
   }
 
+  if (pluginModule.endsWith(".jar")) {
+    if (!entrypoint.userAllowed) {
+      throw PithyException("jar plugin are considered user - --demo/--builtin options are incompatible")
+    }
+
+    val file = File(pluginModule)
+    if (!file.exists()) {
+      throw PithyException("File not found: $pluginModule")
+    }
+
+    if (pluginModule.endsWith(".dex.jar")) {
+      return file.absolutePath
+    } else {
+      val tmpDir = createTempDirectory("stoic-plugin-").toFile()
+      val dstDexJar = File("$tmpDir/$pluginModule.dex.jar")
+      d8PreserveManifest(file, dstDexJar, tmpDir)
+
+      return dstDexJar.absolutePath
+    }
+  }
+
   val pluginDexJar = "$pluginModule.dex.jar"
   if (entrypoint.userAllowed) {
     val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginModule"
     if (File(usrPluginSrcDir).exists()) {
-      logBlock(LogLevel.DEBUG, { "Building $usrPluginSrcDir" }) {
-        val tmpDir = createTempDirectory("stoic-plugin-").toFile()
-        val dstJar = File("$tmpDir/$pluginModule.jar")
-        val dstDexJar = File("$tmpDir/$pluginModule.dex.jar")
+      val tmpDir = createTempDirectory("stoic-plugin-").toFile()
+      val dstJar = File("$tmpDir/$pluginModule.jar")
+      val dstDexJar = File("$tmpDir/$pluginModule.dex.jar")
+
+      logBlock(LogLevel.INFO, { "building $usrPluginSrcDir" }) {
+        logInfo { "building plugin" }
         ProcessBuilder("./build-plugin")
           .inheritIO()
           .directory(File(usrPluginSrcDir))
           .also { it.environment().put("STOIC_PLUGIN_JAR_OUT", dstJar.absolutePath) }
           .waitFor(0)
-        d8PreserveManifest(dstJar, dstDexJar, tmpDir)
-
-        return dstDexJar.absolutePath
       }
+
+      logBlock(LogLevel.INFO, { "dexing $dstJar" }) {
+        d8PreserveManifest(dstJar, dstDexJar, tmpDir)
+      }
+
+      return dstDexJar.absolutePath
     }
 
     logDebug { "$usrPluginSrcDir does not exist - falling back to prebuilt locations." }

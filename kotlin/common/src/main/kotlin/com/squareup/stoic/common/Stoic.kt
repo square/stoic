@@ -44,15 +44,13 @@ inline fun <T> logBlock(level: LogLevel, msg: () -> String, block: () -> T): T {
   }
 
   log(level) { "Starting $msgValue..." }
-  try {
-    val result = block()
-    log(level) { "Finished $msgValue." }
-    return result
-  } catch (e: Throwable) {
-    log(level) { "Aborted $msgValue (--verbose to see Throwable)" }
-    log(VERBOSE) { e.stackTraceToString() }
-    throw e
-  }
+  return runCatching { block() }
+    .onSuccess { log(level) { "Finished $msgValue." } }
+    .onFailure { e ->
+      log(level) { "Aborted $msgValue (--verbose to see Throwable)" }
+      log(VERBOSE) { e.stackTraceToString() }
+    }
+    .getOrThrow()
 }
 
 // JVM doesn't provide any way to set environment variables natively. Instead, we keep track of
