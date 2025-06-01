@@ -1,9 +1,7 @@
 package com.squareup.stoic.common
 
-import com.squareup.stoic.common.LogLevel.VERBOSE
 import java.io.File
 import java.lang.ProcessBuilder.Redirect
-import kotlin.math.exp
 
 var minLogLevel: LogLevel = LogLevel.DEBUG
 
@@ -48,7 +46,7 @@ inline fun <T> logBlock(level: LogLevel, msg: () -> String, block: () -> T): T {
     .onSuccess { log(level) { "Finished $msgValue." } }
     .onFailure { e ->
       log(level) { "Aborted $msgValue (--verbose to see Throwable)" }
-      log(VERBOSE) { e.stackTraceToString() }
+      log(LogLevel.VERBOSE) { e.stackTraceToString() }
     }
     .getOrThrow()
 }

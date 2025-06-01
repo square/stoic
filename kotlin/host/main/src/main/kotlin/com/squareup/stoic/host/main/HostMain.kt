@@ -555,58 +555,63 @@ fun runTool(entrypoint: Entrypoint) {
     ).main(entrypoint.subcommandArgs)
 }
 
+fun runPluginFastPath(entrypoint: Entrypoint, pluginJar: String?): Int {
+  // `adb forward`-powered fast path
+  val serverSocketName = serverSocketName(entrypoint.pkg)
+  val portStr = adbProcessBuilder(
+    "forward", "tcp:0", "localabstract:$serverSocketName"
+  ).stdout()
+  try {
+    Socket("localhost", portStr.toInt()).use {
+      val pluginParsedArgs = PluginParsedArgs(
+        pkg = entrypoint.pkg,
+        restartApp = entrypoint.restartApp,
+        startIfNeeded = !entrypoint.noStartIfNeeded,
+        pluginModule = entrypoint.subcommand,
+        pluginArgs = entrypoint.subcommandArgs,
+        pluginEnvVars = entrypoint.env.toMap(),
+      )
+      val client = PluginClient(pluginJar, pluginParsedArgs, it.inputStream, it.outputStream)
+      return client.handle()
+    }
+  } finally {
+    adbProcessBuilder("forward", "--remove", portStr)
+  }
+}
+
 fun runPlugin(entrypoint: Entrypoint): Int {
   val pluginJar = resolvePluginModule(entrypoint)
 
   if (!entrypoint.restartApp) {
-    // `adb forward`-powered fast path
-    val serverSocketName = serverSocketName(entrypoint.pkg)
-    val portStr = adbProcessBuilder(
-      "forward", "tcp:0", "localabstract:$serverSocketName"
-    ).stdout()
     try {
-      Socket("localhost", portStr.toInt()).use {
-        val pluginParsedArgs = PluginParsedArgs(
-          pkg = entrypoint.pkg,
-          restartApp = entrypoint.restartApp,
-          startIfNeeded = !entrypoint.noStartIfNeeded,
-          pluginModule = entrypoint.subcommand,
-          pluginArgs = entrypoint.subcommandArgs,
-          pluginEnvVars = entrypoint.env.toMap(),
-        )
-        val client = PluginClient(pluginJar, pluginParsedArgs, it.inputStream, it.outputStream)
-        return client.handle()
-      }
+      return runPluginFastPath(entrypoint, pluginJar)
     } catch (e: PithyException) {
       // PithyException will be caught at the outermost level
       throw e
     } catch (e: Exception) {
       logInfo { "fast-path failed" }
       logDebug { e.stackTraceToString() }
-      // Fall through to slow-path
-    } finally {
-      adbProcessBuilder("forward", "--remove", portStr)
     }
   }
 
-  logInfo { "slow-path" }
-
-  // slow-path
-  syncDevice()
-
-  // TODO: other stoic args
-  var stoicArgs = mutableListOf("--log", minLogLevel.level.toString(), "--pkg", entrypoint.pkg)
-  if (entrypoint.restartApp) {
-    stoicArgs += listOf("--restart")
-  }
-
-  return adbProcessBuilder(
+  // force start the server, and then retry
+  logInfo { "starting server via slow-path" }
+  adbProcessBuilder(
     "shell",
-    shellEscapeCmd(listOf("$stoicDeviceSyncDir/bin/stoic") +
-      stoicArgs +
-      listOf(entrypoint.subcommand) +
-      entrypoint.subcommandArgs)
+    shellEscapeCmd(
+      listOf(
+        "$stoicDeviceSyncDir/bin/stoic",
+        "--log",
+        minLogLevel.level.toString(),
+        "--pkg",
+        entrypoint.pkg,
+        "stoic-noop",
+      )
+    )
   ).inheritIO().start().waitFor()
+
+  logInfo { "retrying fast-path" }
+  return runPluginFastPath(entrypoint, pluginJar)
 }
 
 fun checkRequiredSdkPackages(vararg required: String) {

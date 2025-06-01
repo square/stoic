@@ -74,7 +74,13 @@ class StoicPlugin(
 
           return 0
         }
-      }
+      },
+      "stoic-noop" to object : StoicNamedPlugin {
+        override fun run(args: List<String>): Int {
+          // This is used to ensure the server is running
+          return 0
+        }
+      },
     )
     builtinPlugins = defaultPlugins + extraPlugins
   }

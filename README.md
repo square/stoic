@@ -63,7 +63,7 @@ Stoic bundles a few plugins:
 
 ## Authoring Plugins
 
-Each plugin is a normal Java `main` function. You access debugger functionality via the `com.square.stoic.jvmti` package. e.g.
+Each plugin is a normal Java `main` function. You access debugger functionality via the `com.squareup.stoic.jvmti` package. e.g.
 ```
 // get callbacks whenever any method of interest is called
 val method = jvmti.virtualMachine.methodBySig("android/view/InputEventReceiver.dispatchInputEvent(ILandroid/view/InputEvent;)V")
