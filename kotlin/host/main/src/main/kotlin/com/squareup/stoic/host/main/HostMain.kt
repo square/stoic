@@ -40,11 +40,9 @@ import com.squareup.stoic.common.waitFor
 import com.squareup.stoic.d8pm.d8PreserveManifest
 import java.io.File
 import java.io.FileFilter
-import java.io.FilenameFilter
 
 import java.lang.ProcessBuilder.Redirect
 import java.net.Socket
-import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.createTempDirectory
 import kotlin.system.exitProcess
@@ -555,7 +553,7 @@ fun runTool(entrypoint: Entrypoint) {
     ).main(entrypoint.subcommandArgs)
 }
 
-fun runPluginFastPath(entrypoint: Entrypoint, pluginJar: String?): Int {
+fun runPluginFastPath(entrypoint: Entrypoint, dexJarInfo: Pair<File, String>?): Int {
   // `adb forward`-powered fast path
   val serverSocketName = serverSocketName(entrypoint.pkg)
   val portStr = adbProcessBuilder(
@@ -571,7 +569,7 @@ fun runPluginFastPath(entrypoint: Entrypoint, pluginJar: String?): Int {
         pluginArgs = entrypoint.subcommandArgs,
         pluginEnvVars = entrypoint.env.toMap(),
       )
-      val client = PluginClient(pluginJar, pluginParsedArgs, it.inputStream, it.outputStream)
+      val client = PluginClient(dexJarInfo, pluginParsedArgs, it.inputStream, it.outputStream)
       return client.handle()
     }
   } finally {
@@ -580,11 +578,11 @@ fun runPluginFastPath(entrypoint: Entrypoint, pluginJar: String?): Int {
 }
 
 fun runPlugin(entrypoint: Entrypoint): Int {
-  val pluginJar = resolvePluginModule(entrypoint)
+  val dexJarInfo = resolvePluginModule(entrypoint)
 
   if (!entrypoint.restartApp) {
     try {
-      return runPluginFastPath(entrypoint, pluginJar)
+      return runPluginFastPath(entrypoint, dexJarInfo)
     } catch (e: PithyException) {
       // PithyException will be caught at the outermost level
       throw e
@@ -596,6 +594,11 @@ fun runPlugin(entrypoint: Entrypoint): Int {
 
   // force start the server, and then retry
   logInfo { "starting server via slow-path" }
+
+  syncDevice()
+
+  val maybeRestart = if (entrypoint.restartApp) { listOf("--restart") } else { listOf() }
+
   adbProcessBuilder(
     "shell",
     shellEscapeCmd(
@@ -604,14 +607,13 @@ fun runPlugin(entrypoint: Entrypoint): Int {
         "--log",
         minLogLevel.level.toString(),
         "--pkg",
-        entrypoint.pkg,
-        "stoic-noop",
-      )
+        entrypoint.pkg
+      ) + maybeRestart + listOf("stoic-noop"),
     )
   ).inheritIO().start().waitFor()
 
   logInfo { "retrying fast-path" }
-  return runPluginFastPath(entrypoint, pluginJar)
+  return runPluginFastPath(entrypoint, dexJarInfo)
 }
 
 fun checkRequiredSdkPackages(vararg required: String) {
@@ -713,7 +715,7 @@ fun shellEscapeCmd(cmdArgs: List<String>): String {
   }
 }
 
-fun resolvePluginModule(entrypoint: Entrypoint): String? {
+fun resolvePluginModule(entrypoint: Entrypoint): Pair<File, String>? {
   val pluginModule = entrypoint.subcommand
   logDebug { "Attempting to resolve '$pluginModule'" }
   if (listOf(entrypoint.isDemo, entrypoint.isBuiltin, entrypoint.isUser).count { it } > 1) {
@@ -730,57 +732,50 @@ fun resolvePluginModule(entrypoint: Entrypoint): String? {
       throw PithyException("File not found: $pluginModule")
     }
 
-    if (pluginModule.endsWith(".dex.jar")) {
-      return file.absolutePath
-    } else {
-      val tmpDir = createTempDirectory("stoic-plugin-").toFile()
-      val dstDexJar = File("$tmpDir/$pluginModule.dex.jar")
-      d8PreserveManifest(file, dstDexJar, tmpDir)
-
-      return dstDexJar.absolutePath
-    }
+    return DexJarCache.resolve(file)
   }
 
   val pluginDexJar = "$pluginModule.dex.jar"
   if (entrypoint.userAllowed) {
     val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginModule"
     if (File(usrPluginSrcDir).exists()) {
-      val tmpDir = createTempDirectory("stoic-plugin-").toFile()
-      val dstJar = File("$tmpDir/$pluginModule.jar")
-      val dstDexJar = File("$tmpDir/$pluginModule.dex.jar")
-
-      logBlock(LogLevel.INFO, { "building $usrPluginSrcDir" }) {
+      val jarPath = logBlock(LogLevel.INFO, { "building $usrPluginSrcDir" }) {
         logInfo { "building plugin" }
-        ProcessBuilder("./build-plugin")
-          .inheritIO()
-          .directory(File(usrPluginSrcDir))
-          .also { it.environment().put("STOIC_PLUGIN_JAR_OUT", dstJar.absolutePath) }
-          .waitFor(0)
+        val prefix = "STOIC_BUILD_PLUGIN_JAR_OUT="
+        try {
+          ProcessBuilder("./build-plugin")
+            .inheritIO()
+            .directory(File(usrPluginSrcDir))
+            .stdout()
+            .lineSequence()
+            .first { it.startsWith(prefix) }
+            .removePrefix(prefix)
+        } catch (e: NoSuchElementException) {
+          logDebug { e.stackTraceToString() }
+          throw PithyException("build-plugin must output line: $prefix<path-to-output-jar>")
+        }
       }
 
-      logBlock(LogLevel.INFO, { "dexing $dstJar" }) {
-        d8PreserveManifest(dstJar, dstDexJar, tmpDir)
-      }
-
-      return dstDexJar.absolutePath
+      return DexJarCache.resolve(File(jarPath))
     }
 
     logDebug { "$usrPluginSrcDir does not exist - falling back to prebuilt locations." }
 
     val usrPluginDexJar = File("$stoicHostUsrSyncDir/plugins/$pluginDexJar")
     if (usrPluginDexJar.exists()) {
-      return usrPluginDexJar.canonicalPath
+      return DexJarCache.resolve(usrPluginDexJar)
     }
   }
 
   if (entrypoint.demoAllowed) {
     val corePluginDexJar = File("$stoicHostCoreSyncDir/plugins/$pluginDexJar")
     if (corePluginDexJar.exists()) {
-      return corePluginDexJar.canonicalPath
+      return DexJarCache.resolve(corePluginDexJar)
     }
   }
 
   if (entrypoint.builtinAllowed) {
+    // We return null to indicate that the plugin should be resolved inside the server
     return null
   }
 

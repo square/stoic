@@ -17,11 +17,11 @@ import com.squareup.stoic.common.PithyException
 import com.squareup.stoic.common.PluginParsedArgs
 import com.squareup.stoic.common.PluginClient
 import com.squareup.stoic.common.STOIC_PROTOCOL_VERSION
+import com.squareup.stoic.common.Sha
 import com.squareup.stoic.common.logBlock
 import com.squareup.stoic.common.logDebug
 import com.squareup.stoic.common.logError
 import com.squareup.stoic.common.logInfo
-import com.squareup.stoic.common.logVerbose
 import com.squareup.stoic.common.logWarn
 import com.squareup.stoic.common.minLogLevel
 import com.squareup.stoic.common.optionsJsonFromStoicDir
@@ -46,8 +46,7 @@ import java.util.concurrent.TimeUnit
 val seLinuxViolationDetector = SELinuxViolationDetector()
 
 fun main(args: Array<String>) {
-  // minLogLevel isn't set until after we parse args, so we log this to logcat
-  Log.i("stoic", "start of AndroidMain.main")
+  Log.i("stoic", "start of AndroidMain.main. args=${args.toList()}")
 
   val exitCode = try {
     wrappedMain(args)
@@ -155,7 +154,15 @@ fun wrappedMain(rawArgs: Array<String>): Int {
     val socket = bundle.getParcelable("socket", ParcelFileDescriptor::class.java)
     ParcelFileDescriptor.AutoCloseOutputStream(socket).use { output ->
       ParcelFileDescriptor.AutoCloseInputStream(socket).use { input ->
-        val client = PluginClient(pluginDexJar, args, input, output)
+        val client = PluginClient(
+          pluginDexJar?.let {
+            val file = File(it)
+            Pair(file, Sha.computeSha256Sum(file.readBytes()))
+          },
+          args,
+          input,
+          output
+        )
         return client.handle()
       }
     }
@@ -565,7 +572,15 @@ private fun attemptPlugin(
 ): Int {
   start.outputStream.use { output ->
     start.inputStream.use { input ->
-      val client = PluginClient(pluginDexJar, args, input, output)
+      val client = PluginClient(
+        pluginDexJar?.let {
+          val file = File(it)
+          Pair(file, Sha.computeSha256Sum(file.readBytes()))
+        },
+        args,
+        input,
+        output
+      )
       return client.handle()
     }
   }

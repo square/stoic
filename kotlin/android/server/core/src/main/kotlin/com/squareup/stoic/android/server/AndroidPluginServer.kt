@@ -87,15 +87,5 @@ private fun startServer(stoicDir: String) {
   } catch (e: Throwable) {
     Log.e("stoic", "unexpected", e)
     throw e;
-
-  //if (pidFile != null) {
-  //  Log.e("stoic", "deleting pid file: $pidFile")
-  //  File(pidFile).also {
-  //    if (it.exists()) {
-  //      it.delete()
-  //    }
-  //  }
-  //  Log.e("stoic", "pid file deleted")
-  //}
   }
 }

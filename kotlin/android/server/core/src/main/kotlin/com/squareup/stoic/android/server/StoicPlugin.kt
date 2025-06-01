@@ -6,7 +6,6 @@ import com.squareup.stoic.Stoic
 import com.squareup.stoic.common.Failed
 import com.squareup.stoic.common.FailureCode
 import com.squareup.stoic.common.LoadPlugin
-import com.squareup.stoic.common.LogLevel
 import com.squareup.stoic.common.Succeeded
 import com.squareup.stoic.common.MessageReader
 import com.squareup.stoic.common.MessageWriter
@@ -22,21 +21,18 @@ import com.squareup.stoic.common.StreamClosed
 import com.squareup.stoic.common.StreamIO
 import com.squareup.stoic.common.VerifyProtocolVersion
 import com.squareup.stoic.common.logVerbose
-import com.squareup.stoic.common.minLogLevel
 import com.squareup.stoic.common.runCommand
 import com.squareup.stoic.threadlocals.stoic
 import dalvik.system.DexClassLoader
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
-import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.io.PrintStream
 import java.lang.reflect.InvocationTargetException
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.Exception
 import kotlin.concurrent.thread
 
@@ -60,7 +56,7 @@ class StoicPlugin(
           stoic.stdout.println(
             """
               protocol-version: $STOIC_PROTOCOL_VERSION
-              connected-via: ContentProvider
+              connected-via: TODO
               builtin-plugins: ${builtinPlugins.keys}
             """.trimIndent()
           )
@@ -199,12 +195,9 @@ class StoicPlugin(
       } else if (startPlugin.pluginName != null) {
         val p = builtinPlugins[startPlugin.pluginName]
         if (p == null) {
-          writer.writeMessage(
-            Failed(
-              FailureCode.PLUGIN_MISSING.value,
-              "No builtin plugin named: ${startPlugin.pluginName}"
-            )
-          )
+          val msg = "No builtin plugin named: ${startPlugin.pluginName}"
+          Log.i("stoic", msg)
+          writer.writeMessage(Failed(FailureCode.PLUGIN_MISSING.value, msg))
           return false
         } else {
           p
@@ -303,128 +296,6 @@ class StoicPlugin(
       // TODO: Instead of this hacky sleep, we should wait for an ACK from the client
       // Give the message time to make it to the other side before we close the connection
       Thread.sleep(1000)
-    }
-  //val oldMinLogLevel = minLogLevel
-  //try {
-  //  Log.d("stoic", "StoicPlugin.startThread")
-  //  writer.writeMessage(ServerConnectResponse(STOIC_VERSION, pluginId))
-  //  Log.d("stoic", "wrote ServerConnectResponse")
-
-  //  // First message is always start plugin
-  //  val startPlugin = reader.readNext() as StartPlugin
-  //  minLogLevel = LogLevel.valueOf(startPlugin.minLogLevel)
-
-  //  Log.d("stoic", "startPlugin: $startPlugin (logLevel is $minLogLevel)")
-
-  //  // The pluginJar is relative to the stoicDir
-  //  val pluginJar = "$stoicDir/${startPlugin.pluginJar}"
-  //  val dexoutDir = File(File(pluginJar).parent, "dexout")
-  //  dexoutDir.mkdir()
-  //  Log.d("stoic", "pluginJar: $pluginJar - exists? ${File(pluginJar).exists()}")
-  //  Log.d("stoic", "dexoutDir: $dexoutDir")
-  //  val parentClassLoader = StoicPlugin::class.java.classLoader
-
-  //  // It's important to use canonical paths to avoid triggering
-  //  // https://github.com/square/stoic/issues/2
-  //  val classLoader = DexClassLoader(
-  //    File(pluginJar).canonicalPath,
-  //    dexoutDir.canonicalPath,
-  //    null,
-  //    parentClassLoader)
-  //  val stdinOutPipe = PipedOutputStream()
-  //  val stdin = PipedInputStream(stdinOutPipe)
-  //  // Now start pumping messages and input
-  //  val isFinished = AtomicBoolean(false)
-  //  startMessagePumpThread(stdinOutPipe, isFinished)
-
-  //  val stdout = PrintStream(MessageWriterOutputStream(STDOUT, writer))
-  //  val stderr = PrintStream(MessageWriterOutputStream(STDERR, writer))
-
-  //  val pluginStoic = Stoic(startPlugin.env, stdin, stdout, stderr)
-  //  Log.d("stoic", "pluginArgs: ${startPlugin.pluginArgs}")
-  //  val args = startPlugin.pluginArgs.toTypedArray()
-  //  val oldClassLoader = Thread.currentThread().contextClassLoader
-  //  Thread.currentThread().contextClassLoader = classLoader
-  //  val exitCode = try {
-  //    Log.d("stoic", "made classLoader: $classLoader (parent: $parentClassLoader)")
-
-  //    // TODO: It'd be nice to allow people to follow the Java convention of declaring a main
-  //    // method in the manifest, and then insert a StoicMainKt wrapper in the dex.jar (or even
-  //    // insert the manifest into the dex.jar)
-  //    val pluginMainClass = classLoader.loadClass("MainKt")
-  //    Log.d("stoic", "loaded class: $pluginMainClass via ${pluginMainClass.classLoader}")
-  //    val pluginMain = pluginMainClass.getDeclaredMethod("main", args.javaClass)
-  //    Log.d("stoic", "invoking pluginMain: $pluginMain")
-
-  //    // TODO: error message when passing wrong type isn't very good - should we catch
-  //    // Throwable?
-  //    pluginStoic.callWith(forwardUncaught = false, printErrors = false) {
-  //      pluginMain.invoke(null, args)
-  //    }
-  //    0
-  //  } catch (e: InvocationTargetException) {
-  //    Log.e("stoic", "plugin crashed", e)
-  //    val targetException = e.targetException
-  //    if (targetException !is ExitCodeException) {
-  //      targetException.printStackTrace(stderr)
-  //      1
-  //    } else {
-  //      targetException.code
-  //    }
-  //  } catch (e: ReflectiveOperationException) {
-  //    Log.e("stoic", "problem starting plugin", e)
-  //    e.printStackTrace(stderr)
-  //    1
-  //  } finally {
-  //    // Restore previous classloader
-  //    Thread.currentThread().contextClassLoader = oldClassLoader
-  //  }
-
-  //  // TODO: Good error message if the plugin closes stdin/stdout/stderr prematurely
-  //  Log.d("stoic", "plugin finished")
-  //  writer.writeMessage(PluginFinished(exitCode))
-  //  isFinished.set(true)
-  //} catch (e: Throwable) {
-  //  Log.e("stoic", "unexpected", e)
-
-  //  // We only close the streams in the event of an exception. Otherwise we want to give
-  //  // the buffering thread(s) a chance to complete their transfers
-  //  socketInputStream.close()
-  //  socketOutputStream.close()
-
-  //  // Bring down the process for non-Exception Throwables
-  //  if (e !is Exception) {
-  //    throw e
-  //  }
-  //} finally {
-  //  Log.d("stoic", "Restoring log level to $oldMinLogLevel")
-
-  //  // TODO: Make minLogLevel a thread-local - otherwise this is racy
-  //  minLogLevel = oldMinLogLevel
-  //}
-  }
-
-  private fun startMessagePumpThread(stdinOutPipe: PipedOutputStream, isFinished: AtomicBoolean) {
-    thread (name = "stoic-plugin-pump") {
-      try {
-        while (true) {
-          val msg = reader.readNext()
-          if (msg is StreamIO) {
-            assert(msg.id == STDIN)
-            // TODO: this will block if the plugin isn't consuming input rapidly enough
-            stdinOutPipe.write(msg.buffer)
-          }
-        }
-      } catch (e: IOException) {
-        if (isFinished.get()) {
-          // This is normal
-          Log.d("stoic", "stoic-plugin-pump thread exiting after plugin finished $e")
-        } else {
-          Log.d("stoic", "stoic plugin input stalled", e)
-        }
-      } catch (e: Throwable) {
-        Log.e("stoic", "stoic-plugin-pump unexpected", e)
-      }
     }
   }
 }

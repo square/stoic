@@ -15,11 +15,14 @@ const val stoicDemoAppWithoutSdk = "com.squareup.stoic.demoapp.withoutsdk"
 const val runAsCompat = "$stoicDeviceSyncDir/bin/run-as-compat"
 
 class PluginClient(
-  val pluginDexJar: String?,
+  dexJarInfo: Pair<File, String>?,
   val pluginParsedArgs: PluginParsedArgs,
   inputStream: InputStream,
   outputStream: OutputStream
 ) {
+  val pluginDexJar = dexJarInfo?.first
+  val pluginDexJarSha256Sum = dexJarInfo?.second
+  val pluginName = pluginDexJar?.name?.removeSuffix(".dex.jar") ?: pluginParsedArgs.pluginModule
   val writer = MessageWriter(DataOutputStream(outputStream))
   val reader = MessageReader(DataInputStream(inputStream))
   var nextMessage: Any? = null
@@ -65,12 +68,11 @@ class PluginClient(
     }
 
     val loadPluginPseudoFd = writer.openPseudoFdForWriting()
-    val pluginBytes = File(pluginDexJar).readBytes()
-    val pluginSha = computeSha256(pluginBytes)
+    val pluginBytes = pluginDexJar.readBytes()
     writer.writeMessage(
         LoadPlugin(
-        pluginName = pluginParsedArgs.pluginModule,
-        pluginSha = pluginSha,
+        pluginName = pluginName,
+        pluginSha = pluginDexJarSha256Sum!!,
         pseudoFd = loadPluginPseudoFd,
       )
     )
@@ -83,8 +85,8 @@ class PluginClient(
     writer.closePseudoFdForWriting(loadPluginPseudoFd)
     writer.writeMessage(
       StartPlugin(
-        pluginName = pluginParsedArgs.pluginModule,
-        pluginSha = pluginSha,
+        pluginName = pluginName,
+        pluginSha = pluginDexJarSha256Sum,
         pluginArgs = pluginParsedArgs.pluginArgs,
         minLogLevel = minLogLevel.name,
         env = pluginParsedArgs.pluginEnvVars
@@ -104,8 +106,8 @@ class PluginClient(
     writer.writeMessage(VerifyProtocolVersion(STOIC_PROTOCOL_VERSION))
     writer.writeMessage(
       StartPlugin(
-        pluginName = pluginParsedArgs.pluginModule,
-        pluginSha = pluginDexJar?.let { computeSha256(File(it).readBytes()) },
+        pluginName = pluginName,
+        pluginSha = pluginDexJarSha256Sum,
         pluginArgs = pluginParsedArgs.pluginArgs,
         minLogLevel = minLogLevel.name,
         env = pluginParsedArgs.pluginEnvVars,
@@ -135,10 +137,3 @@ class PluginClient(
     }
   }
 }
-
-fun computeSha256(bytes: ByteArray): String {
-  val digest = MessageDigest.getInstance("SHA-256")
-  val hashBytes = digest.digest(bytes)
-  return hashBytes.joinToString("") { "%02x".format(it) }
-}
-
