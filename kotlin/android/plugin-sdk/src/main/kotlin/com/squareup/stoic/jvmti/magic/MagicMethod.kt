@@ -4,7 +4,7 @@ import com.squareup.stoic.jvmti.JvmtiMethod
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Modifier
 
-class MagicMethod(private val obj: Any?, private val method: JvmtiMethod) {
+class MagicMethod(private val obj: Any?, val method: JvmtiMethod) {
   operator fun invoke(vararg params: Any?): Any? {
     try {
       if (method.name == "<init>") {

@@ -200,6 +200,10 @@ class JvmtiMethod private constructor(val methodId: JMethodId) {
 
   val simpleQualifiedName = "${jvmtiClass.simpleName}.$name"
 
+  override fun toString(): String {
+    return "JvmtiMethod($simpleQualifiedName$signature)"
+  }
+
   companion object {
     private val cache = LruCache<JMethodId, JvmtiMethod>(8192)
 

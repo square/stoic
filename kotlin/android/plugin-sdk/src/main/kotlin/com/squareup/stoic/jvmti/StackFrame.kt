@@ -17,6 +17,10 @@ class StackFrame(val thread: Thread, val height: Int, val location: Location) {
     return thread.stackTrace.takeLast(height)
   }
 
+  override fun toString(): String {
+    return "StackFrame(thread=$thread, location=$location)"
+  }
+
   fun <T> get(variable: LocalVariable<T>): T {
     val thread = Thread.currentThread()
     when (variable.signature) {

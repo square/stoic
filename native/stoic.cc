@@ -575,6 +575,12 @@ Jvmti_VirtualMachine_nativeToReflectedMethod(JNIEnv *jni, jobject vmClass, jclas
   return jni->ToReflectedMethod(clazz, castMethodId, isStatic);
 }
 
+JNIEXPORT jlong JNICALL
+Jvmti_VirtualMachine_nativeFromReflectedMethod(JNIEnv *jni, jobject vmClass, jobject method) {
+  jmethodID methodId = jni->FromReflectedMethod(method);
+  return reinterpret_cast<jlong>(methodId);
+}
+
 JNIEXPORT jstring JNICALL
 Jvmti_VirtualMachine_nativeGetClassSignature(JNIEnv *jni, jobject vmClass, jclass clazz) {
   char* signature = NULL;
@@ -973,6 +979,7 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
     {"nativeGetClassFields",            "(Ljava/lang/Class;)[Lcom/squareup/stoic/jvmti/JvmtiField;",    (void *)&Jvmti_VirtualMachine_nativeGetClassFields},
     {"nativeToReflectedField",          "(Ljava/lang/Class;JZ)Ljava/lang/reflect/Field;",               (void *)&Jvmti_VirtualMachine_nativeToReflectedField},
     {"nativeToReflectedMethod",         "(Ljava/lang/Class;JZ)Ljava/lang/Object;",                      (void *)&Jvmti_VirtualMachine_nativeToReflectedMethod},
+    {"nativeFromReflectedMethod",       "(Ljava/lang/reflect/Method;)J",                                (void *)&Jvmti_VirtualMachine_nativeFromReflectedMethod},
     {"nativeGetClassSignature",         "(Ljava/lang/Class;)Ljava/lang/String;",                        (void *)&Jvmti_VirtualMachine_nativeGetClassSignature},
     {"nativeMethodEntryCallbacks",      "(Ljava/lang/Thread;Z)V",                                       (void *)&Jvmti_VirtualMachine_nativeMethodEntryCallbacks},
     {"nativeMethodExitCallbacks",       "(Ljava/lang/Thread;Z)V",                                       (void *)&Jvmti_VirtualMachine_nativeMethodExitCallbacks},

@@ -2,6 +2,7 @@ package com.squareup.stoic.jvmti
 
 import com.squareup.stoic.highlander
 import java.lang.reflect.Field
+import java.lang.reflect.Method
 
 // a jmethodID
 typealias JMethodId = Long
@@ -84,6 +85,9 @@ object VirtualMachine {
 
   @JvmStatic
   external fun nativeMethodExitCallbacks(thread: Thread, isEnabled: Boolean)
+
+  @JvmStatic
+  external fun nativeFromReflectedMethod(method: Method): JMethodId
 
   // Callback from native
   @JvmStatic
