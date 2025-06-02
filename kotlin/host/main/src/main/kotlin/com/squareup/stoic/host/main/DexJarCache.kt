@@ -5,6 +5,7 @@ package com.squareup.stoic.host.main
 import com.squareup.stoic.common.LogLevel
 import com.squareup.stoic.common.Sha
 import com.squareup.stoic.common.logBlock
+import com.squareup.stoic.common.logInfo
 import com.squareup.stoic.d8pm.d8PreserveManifest
 import kotlinx.serialization.ExperimentalSerializationApi
 import java.io.File
@@ -35,6 +36,7 @@ object DexJarCache {
   fun resolve(jarFile: File): Pair<File, String> {
     val keyDir = computeKeyDir(jarFile)
     get(keyDir, jarFile)?.let { return it }
+    logInfo { "DexJarCache.get failed - regenerating sha/dex" }
 
     val dexJar = jarFileToDexJarFile(keyDir, jarFile)
     Files.createDirectories(keyDir)
