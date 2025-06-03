@@ -3,6 +3,7 @@ package com.squareup.stoic.common
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicBoolean
@@ -128,22 +129,24 @@ class PluginClient(
             break
           }
 
-          logVerbose { "attempting read" }
           val byteCount = System.`in`.read(buffer, 0, buffer.size)
-          logVerbose { "byteCount $byteCount" }
           if (byteCount == -1) {
             writer.writeMessage(StreamClosed(STDIN))
             break
-          } else if (byteCount > 0) {
+          } else {
+            check(byteCount > 0)
             val bytes = buffer.copyOfRange(0, byteCount)
             writer.writeMessage(StreamIO(0, bytes))
-          } else {
-            System.err.println("wtf")
           }
         }
       } catch (e: Throwable) {
-        logError { e.stackTraceToString() }
-        throw e
+        if (e is IOException) {
+          // this is unconcerning - the connection is being torn down as we attempt to pump stdin
+          logVerbose { "exception while pumping stdin (unconcerning) ${e.stackTraceToString()}"}
+        } else {
+          logError { e.stackTraceToString() }
+          throw e
+        }
       }
     }
 
