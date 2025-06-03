@@ -9,6 +9,11 @@ script_dir="$(dirname "$(readlink -f "$0")")"
 rm -r "$script_dir/../out"
 "$script_dir/../build.sh"
 
+if [ "$(realpath "$(which stoic)")" != "$(realpath "$script_dir/../out/rel/bin/stoic")" ]; then
+  echo stoic resolves to "$(which stoic)" - not the one we just built
+  exit 1
+fi
+
 "$script_dir"/shellcheck.sh
 "$script_dir"/test-shell.sh
 "$script_dir"/test-demo-app-without-sdk.sh
