@@ -5,7 +5,8 @@ import java.io.DataOutputStream
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
-import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 const val stoicDeviceDir = "/data/local/tmp/stoic"
 const val stoicDeviceSyncDir = "$stoicDeviceDir/sync"
@@ -117,6 +118,35 @@ class PluginClient(
     // To minimize roundtrips, we don't read the version result until after we've written RunPlugin
     handleVersionResult()
     handleStartPluginResult()
+
+    val isFinished = AtomicBoolean(false)
+    thread(name = "stdin-daemon", isDaemon = true) {
+      val buffer = ByteArray(8192)
+      try {
+        while (true) {
+          if (isFinished.get()) {
+            break
+          }
+
+          logVerbose { "attempting read" }
+          val byteCount = System.`in`.read(buffer, 0, buffer.size)
+          logVerbose { "byteCount $byteCount" }
+          if (byteCount == -1) {
+            writer.writeMessage(StreamClosed(STDIN))
+            break
+          } else if (byteCount > 0) {
+            val bytes = buffer.copyOfRange(0, byteCount)
+            writer.writeMessage(StreamIO(0, bytes))
+          } else {
+            System.err.println("wtf")
+          }
+        }
+      } catch (e: Throwable) {
+        logError { e.stackTraceToString() }
+        throw e
+      }
+    }
+
     while (true) {
       val msg = consumeMessage()
       when (msg) {
@@ -130,6 +160,7 @@ class PluginClient(
         is PluginFinished -> {
           // To allow the server to stop pumping stdin cleanly, we write a StreamClosed message.
           writer.writeMessage(StreamClosed(STDIN))
+          isFinished.set(true)
           return msg.exitCode
         }
         else -> throw IllegalArgumentException("Unexpected msg: $msg")

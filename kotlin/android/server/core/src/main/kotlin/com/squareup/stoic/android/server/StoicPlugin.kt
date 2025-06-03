@@ -220,7 +220,6 @@ class StoicPlugin(
 
       writer.writeMessage(Succeeded("Plugin started"))
 
-      // TODO: need to pump
       var exitCode = -1
       val t = thread {
         exitCode = pluginStoic.callWith {
@@ -242,6 +241,12 @@ class StoicPlugin(
           is StreamClosed -> {
             if (msg.id != STDIN) { throw IllegalArgumentException("Unexpected stream id: ${msg.id}") }
             logVerbose { "StreamClosed(STDIN)" }
+            stdinOutPipe.close()
+
+            // TODO: Really, we shouldn't break here - there might be other inputs to pump
+            //   But, right now we don't surface those to clients, so it's okay.
+            //   If we didn't break here, we'd need an alternate way to end the pump when the plugin
+            //   finished.
             break
           }
         }

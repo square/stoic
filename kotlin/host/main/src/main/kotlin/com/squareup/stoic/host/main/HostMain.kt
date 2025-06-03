@@ -37,14 +37,12 @@ import com.squareup.stoic.common.serverSocketName
 import com.squareup.stoic.common.stdout
 import com.squareup.stoic.common.stoicDeviceSyncDir
 import com.squareup.stoic.common.waitFor
-import com.squareup.stoic.d8pm.d8PreserveManifest
 import java.io.File
 import java.io.FileFilter
 
 import java.lang.ProcessBuilder.Redirect
 import java.net.Socket
 import java.nio.file.Paths
-import kotlin.io.path.createTempDirectory
 import kotlin.system.exitProcess
 
 
