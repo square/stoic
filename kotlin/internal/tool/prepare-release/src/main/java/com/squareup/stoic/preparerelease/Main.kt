@@ -3,6 +3,7 @@ package com.squareup.stoic.preparerelease
 import com.squareup.stoic.bridge.versionCodeFromVersionName
 
 import java.io.File
+import java.lang.ProcessBuilder.Redirect
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -34,29 +35,47 @@ fun main(args: Array<String>) {
 
   ensureCleanGitRepo(stoicDir)
 
-  println("running test/regression-check.sh... (this will take a while)")
-  check(ProcessBuilder("$stoicDir/test/regression-check.sh").inheritIO().start().waitFor() == 0)
-  println("... test/regression-check.sh completed successfully.")
-
-  println("building clean...")
+  println("Removing $stoicDir/out to ensure clean build...")
   check(ProcessBuilder("rm", "-r", "$stoicDir/out").inheritIO().start().waitFor() == 0)
-  check(ProcessBuilder("$stoicDir/build.sh").inheritIO().start().waitFor() == 0)
-  println("... done building clean.")
 
-  println("preparing tar archive...")
-  check(
-    ProcessBuilder(
-      "tar",
-      "--create",
-      "--gzip",
-      "--file=${releaseTar.absolutePath}",
-      "--directory=${outRelDir.absolutePath}",
-      "."
-    ).inheritIO().start().waitFor() == 0
-  )
-  println("... done preparing tar archive.")
+  println("Updating ${versionFile.absolutePath} to $releaseVersion")
+  versionFile.writeText("$releaseVersion\n")
+  try {
+    println("running test/clean-build-and-regression-check.sh... (this will take a while)")
+    check(
+      ProcessBuilder(
+        "$stoicDir/test/clean-build-and-regression-check.sh"
+      ).inheritIO().start().waitFor() == 0
+    )
+    println("... test/clean-build-and-regression-check.sh completed successfully.")
 
+    println("preparing tar archive...")
+    check(
+      ProcessBuilder(
+        "tar",
+        "--create",
+        "--gzip",
+        "--file=${releaseTar.absolutePath}",
+        "--directory=${outRelDir.absolutePath}",
+        "."
+      ).inheritIO().start().waitFor() == 0
+    )
+    println("... done preparing tar archive.")
+  } catch (e: Throwable) {
+    println("Restoring ${versionFile.absolutePath} to $currentVersion due to failure")
+    versionFile.writeText("$currentVersion\n")
+    throw e
+  }
+
+  println("Updating ${versionFile.absolutePath} to $postReleaseVersion")
   versionFile.writeText("$postReleaseVersion\n")
+
+  val sha256sum = ProcessBuilder("sha256sum", releaseTar.absolutePath)
+    .inheritIO()
+    .redirectOutput(Redirect.PIPE)
+    .start()
+    .also { check(it.waitFor() == 0) }
+    .inputReader().readText().trim()
 
   val releaseTag = "v$releaseVersion"
   println(
@@ -84,6 +103,11 @@ fun main(args: Array<String>) {
       # Upload the release to Github
       gh release create $releaseTag $releaseTar --title $releaseTag
       
+      # Update the release in https://github.com/block/homebrew-tap
+      # The sha256sum for this release is $sha256sum
+      # The URL should be:
+      # https://github.com/block/stoic/releases/download/v$releaseVersion/stoic-$releaseVersion.tar.gz
+      # (verify that after uploading to github)
       
       
     """.trimIndent()
