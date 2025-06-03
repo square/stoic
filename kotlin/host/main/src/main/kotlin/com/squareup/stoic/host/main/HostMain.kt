@@ -687,10 +687,27 @@ fun arsync(vararg args: String) {
     "$stoicHostScriptDir/arsync-wrapper.sh"
   }
 
+  val brewRsync = if (ProcessBuilder("which", "brew").waitFor(null) == 0) {
+    val brewPrefix = ProcessBuilder("brew", "--prefix").stdout()
+    val brewRsync = "$brewPrefix/bin/rsync"
+
+    // Force rsync to use the homebrew version, even if the system version is earlier in the PATH
+    // This is useful because Mac ships an ancient version of rsync
+    if (File(brewRsync).exists()) brewRsync else null
+  } else {
+    null
+  }
+  val rsyncPath = brewRsync ?: ProcessBuilder("which", "rsync").stdout()
+
   // I observe hangs with large files if I don't pass --blocking-io
-  val arsyncCmd = listOf("rsync", "--blocking-io", "--rsh=sh $wrapper") + args
+  val arsyncCmd = listOf(rsyncPath, "--blocking-io", "--rsh=sh $wrapper") + args
   logDebug { "$arsyncCmd" }
-  runCommand(arsyncCmd, inheritIO = true, envOverrides = mapOf("ANDROID_SERIAL" to adbSerial))
+  try {
+    runCommand(arsyncCmd, inheritIO = true, envOverrides = mapOf("ANDROID_SERIAL" to adbSerial))
+  } catch (e: FailedExecException) {
+    logError { "$rsyncPath failed - check: $rsyncPath --version (Stoic needs 3.x.x)" }
+    throw e
+  }
 }
 
 fun syncDevice() {

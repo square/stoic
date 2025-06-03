@@ -154,11 +154,11 @@ fun resolvedProcessBuilder(
   return builder
 }
 
-fun ProcessBuilder.waitFor(expectedExitCode: Int? = 0) {
-  start().waitFor(expectedExitCode, command())
+fun ProcessBuilder.waitFor(expectedExitCode: Int? = 0): Int {
+  return start().waitFor(expectedExitCode, command())
 }
 
-fun Process.waitFor(expectedExitCode: Int?, command: List<String>? = null) {
+fun Process.waitFor(expectedExitCode: Int?, command: List<String>? = null): Int {
   val exitCode = waitFor()
 
   if (expectedExitCode != null && expectedExitCode != exitCode) {
@@ -175,6 +175,8 @@ fun Process.waitFor(expectedExitCode: Int?, command: List<String>? = null) {
       exitCode,
       "Failed command: ${commandString}exitCode=$exitCode$errorOutputMsg",
       errorOutput)
+  } else {
+    return exitCode
   }
 }
 
