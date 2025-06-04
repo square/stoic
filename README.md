@@ -1,4 +1,4 @@
-# Stoic
+# Stoic <img src="./assets/logo.svg" alt="App logo" width="25">
 
 > *"Σκόπει εἰς σεαυτόν. Ἐντὸς σοῦ πηγὴ ἀγαθοῦ ἐστιν, ἡ ἀεὶ ἐκβρύειν ἑτοίμη, ἐὰν ἀεὶ σκάπτῃς."*
 >
@@ -11,6 +11,8 @@
 > "Fire tests gold and adversity tests the brave."
 
 *-Seneca the Younger (c. 4 BC - AD 65), Roman statesman and Stoic philosopher*
+
+
 
 
 ## Introduction
