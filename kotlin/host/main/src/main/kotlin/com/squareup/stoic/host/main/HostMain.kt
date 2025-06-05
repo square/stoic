@@ -290,9 +290,13 @@ class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "shell") {
     }
 
     syncDevice()
+
+    val usrShellSh = "$stoicHostUsrConfigDir/shell.sh" // might not exist
+    val prebuiltShellSh = "$stoicReleaseDir/template/usr_config/shell.sh"
+    val shellSh = if (File(usrShellSh).exists()) { usrShellSh } else { prebuiltShellSh }
     try {
       runCommand(
-        listOf("sh", "$stoicHostUsrConfigDir/shell.sh") + shellArgs,
+        listOf("sh", shellSh) + shellArgs,
         envOverrides = mapOf(
           "ANDROID_SERIAL" to adbSerial,
           "STOIC_TTY_OPTION" to ttyOption,
@@ -337,7 +341,7 @@ class RsyncCommand(val entrypoint: Entrypoint) : CoreCliktCommand(name = "rsync"
     entrypoint.verifyAllowedOption("--verbose", "--debug", "--android-serial")
     resolveAdbSerial(entrypoint.androidSerial)
 
-    arsync(*rsyncArgs.toTypedArray())
+    arsync(rsyncArgs)
   }
 }
 
@@ -662,7 +666,7 @@ fun checkRequiredSdkPackages(vararg required: String) {
 }
 
 // This version of arsync never pushes as root - TODO: allow this as an option
-fun arsync(vararg args: String) {
+fun arsync(args: List<String>) {
   val binDir = "$stoicDeviceSyncDir/bin"
   val adbRsyncPath = "$binDir/rsync"
   val devNullInput = Redirect.from(File("/dev/null"))
@@ -752,7 +756,18 @@ fun arsync(vararg args: String) {
 
 fun syncDevice() {
   logInfo { "syncing device ..." }
-  arsync("--archive", "--delete", "$stoicHostCoreSyncDir/", "$stoicHostUsrSyncDir/", "adb:$stoicDeviceSyncDir/")
+  val opts = listOf("--archive", "--delete")
+
+  // This won't necessarily exist - need to run `stoic tool setup`
+  val maybeUsrSyncDir = if (File(stoicHostUsrSyncDir).exists()) {
+    listOf("$stoicHostUsrSyncDir/")
+  } else {
+    listOf()
+  }
+
+  arsync(
+    opts + listOf("$stoicHostCoreSyncDir/") + maybeUsrSyncDir + listOf("adb:$stoicDeviceSyncDir/")
+  )
 
   // We remove write permissions to stop people from accidentally writing to files that will be
   // subsequently overwritten by the next sync
