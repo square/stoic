@@ -14,7 +14,7 @@ if [ "$1" != "rsync" ]; then
 fi
 shift
 
-adb_rsync_path=/data/local/tmp/stoic/sync/bin/rsync 
+adb_rsync_path=/data/local/tmp/.stoic/sync/bin/rsync 
 #>&2 echo adb_rsync_path=$adb_rsync_path
 #>&2 echo '$@=' "$@"
 adb shell su shell "$adb_rsync_path" "$@"

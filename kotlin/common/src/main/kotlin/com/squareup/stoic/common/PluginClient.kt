@@ -9,7 +9,7 @@ import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
-const val stoicDeviceDir = "/data/local/tmp/stoic"
+const val stoicDeviceDir = "/data/local/tmp/.stoic"
 const val stoicDeviceSyncDir = "$stoicDeviceDir/sync"
 const val stoicDeviceSyncPluginDir = "$stoicDeviceSyncDir/plugins"
 const val shebangJarDir = "$stoicDeviceDir/shebang_jar"
