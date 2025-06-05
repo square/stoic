@@ -72,7 +72,6 @@ export GRAALVM_HOME
   :host:main:nativeCompile \
   :android:plugin-sdk:assemble \
   :android:server:injected:dexJar \
-  :android:main:dexJar \
   :demo-plugin:helloworld:dexJar \
   :demo-plugin:appexitinfo:dexJar \
   :demo-plugin:breakpoint:dexJar \
@@ -85,7 +84,6 @@ cp host/main/build/native/nativeCompile/stoic "$stoic_release_dir"/bin/
 cp android/plugin-sdk/build/libs/plugin-sdk.jar "$stoic_release_dir"/jar/stoic-android-plugin-sdk.jar
 cp android/plugin-sdk/build/libs/plugin-sdk-sources.jar "$stoic_release_dir"/jar/stoic-android-plugin-sdk-sources.jar
 cp android/server/injected/build/libs/injected.dex.jar "$stoic_core_sync_dir/stoic/android-server-injected.dex.jar"
-cp android/main/build/libs/main.dex.jar "$stoic_core_sync_dir/stoic/android-main.dex.jar"
 cp demo-app/without-sdk/build/outputs/apk/debug/without-sdk-debug.apk "$stoic_core_sync_dir/apk/demo-app-without-sdk-debug.apk"
 
 plugins_dir="$stoic_core_sync_dir/plugins"

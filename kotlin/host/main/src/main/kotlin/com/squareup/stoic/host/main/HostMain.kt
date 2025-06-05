@@ -27,6 +27,7 @@ import com.squareup.stoic.common.LogLevel
 import com.squareup.stoic.common.PithyException
 import com.squareup.stoic.common.PluginClient
 import com.squareup.stoic.common.PluginParsedArgs
+import com.squareup.stoic.common.STOIC_PROTOCOL_VERSION
 import com.squareup.stoic.common.logBlock
 import com.squareup.stoic.common.logDebug
 import com.squareup.stoic.common.logError
@@ -37,12 +38,14 @@ import com.squareup.stoic.common.serverSocketName
 import com.squareup.stoic.common.stdout
 import com.squareup.stoic.common.stoicDeviceSyncDir
 import com.squareup.stoic.common.waitFor
+import com.squareup.stoic.common.waitSocketName
 import java.io.File
 import java.io.FileFilter
 
 import java.lang.ProcessBuilder.Redirect
 import java.net.Socket
 import java.nio.file.Paths
+import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 
@@ -595,20 +598,55 @@ fun runPlugin(entrypoint: Entrypoint): Int {
 
   syncDevice()
 
-  val maybeRestart = if (entrypoint.restartApp) { listOf("--restart") } else { listOf() }
+  val startOption = if (entrypoint.restartApp) {
+    "restart"
+  } else if (entrypoint.noStartIfNeeded) {
+    "do_not_start"
+  } else {
+    "start_if_needed"
+  }
 
-  adbProcessBuilder(
+  val debugOption = if (minLogLevel <= LogLevel.DEBUG) {
+    "debug_true"
+  } else {
+    "debug_false"
+  }
+
+  val proc = adbProcessBuilder(
     "shell",
     shellEscapeCmd(
       listOf(
-        "$stoicDeviceSyncDir/bin/stoic",
-        "--log",
-        minLogLevel.level.toString(),
-        "--pkg",
-        entrypoint.pkg
-      ) + maybeRestart + listOf("stoic-noop"),
+        "$stoicDeviceSyncDir/bin/stoic-attach",
+        "$STOIC_PROTOCOL_VERSION",
+        entrypoint.pkg,
+        waitSocketName(entrypoint.pkg),
+        startOption,
+        debugOption
+      )
     )
-  ).inheritIO().start().waitFor()
+  )
+    .redirectInput(File("/dev/null"))
+    .redirectOutput(Redirect.PIPE)
+    .redirectErrorStream(true)
+    .start()
+
+  if (minLogLevel <= LogLevel.DEBUG) {
+    proc.inputReader().use { inputReader ->
+      thread {
+        inputReader.lineSequence().forEach {
+          logDebug { it }
+        }
+        if (proc.waitFor() != 0) {
+          logError { "stoic-attach failed - see output above" }
+        }
+      }.join()
+    }
+  } else {
+    if (proc.waitFor() != 0) {
+      val stoicAttachOutput = proc.inputReader().readText()
+      logError { "stoic-attach failed\n$stoicAttachOutput" }
+    }
+  }
 
   logInfo { "retrying fast-path" }
   return runPluginFastPath(entrypoint, dexJarInfo)

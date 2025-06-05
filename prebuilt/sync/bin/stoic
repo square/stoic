@@ -1,8 +1,0 @@
-#!/system/bin/sh
-
-# This is the version of stoic that runs on the device
-
-# app_process64 is slightly slower than dalvikvm, but much more forgiving about
-# which APIs you can use.
-
-app_process64 -Djava.class.path=/data/local/tmp/stoic/sync/stoic/android-main.dex.jar / com.squareup.stoic.android.client.AndroidMainKt "$@"

@@ -1,4 +1,4 @@
-package com.squareup.stoic.android.client
+package com.squareup.stoic.host.main
 
 import com.squareup.stoic.common.logDebug
 import com.squareup.stoic.common.logError
@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Collections
 import kotlin.concurrent.thread
 
+// TODO: port this code to work on host, or in stoic-attach
 class SELinuxViolationDetector {
   private val selinuxViolations = Collections.synchronizedList(mutableListOf<String>())
   private var logcatProcess: Process? = null
