@@ -119,7 +119,7 @@ class Entrypoint : CliktCommand(
   // Track which options were explicitly set
   private val specifiedOptions = mutableSetOf<String>()
 
-  fun verifyAllowedOption(subcommand: String, allowedOptions: List<String>) {
+  fun verifyOptions(subcommand: String, allowedOptions: List<String>) {
     specifiedOptions.forEach {
       if (it !in allowedOptions) {
         throw UsageError("$it not allowed with $subcommand")
@@ -301,7 +301,7 @@ class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic shel
   val defaultConfig by option("--default-config", "-d").flag()
 
   override fun run() {
-    entrypoint.verifyAllowedOption("shell", listOf("--verbose", "--debug", "--android-serial"))
+    entrypoint.verifyOptions("shell", listOf("--verbose", "--debug", "--android-serial"))
 
     if (listOf(tty, forceTty, disableTty).count { it } > 1) {
       throw CliktError("-t, -tt, and -T are mutually exclusive")
@@ -378,7 +378,7 @@ class RsyncCommand(val entrypoint: Entrypoint) : CoreCliktCommand(name = "rsync"
   val rsyncArgs by argument().multiple()
 
   override fun run() {
-    entrypoint.verifyAllowedOption("rsync", listOf("--verbose", "--debug", "--android-serial"))
+    entrypoint.verifyOptions("rsync", listOf("--verbose", "--debug", "--android-serial"))
 
     arsync(rsyncArgs)
   }
@@ -392,7 +392,7 @@ class InitConfigCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic
   }
 
   override fun run() {
-    entrypoint.verifyAllowedOption("init-config", listOf("--verbose", "--debug"))
+    entrypoint.verifyOptions("init-config", listOf("--verbose", "--debug"))
 
     val buildToolsVersion = StoicProperties.ANDROID_BUILD_TOOLS_VERSION
     val targetApiLevel = StoicProperties.ANDROID_TARGET_SDK
@@ -447,7 +447,7 @@ class NewPluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic 
   val pluginName by argument("name")
 
   override fun run() {
-    entrypoint.verifyAllowedOption("new-plugin", listOf("--verbose", "--debug"))
+    entrypoint.verifyOptions("new-plugin", listOf("--verbose", "--debug"))
 
     val pluginNameRegex = Regex("^[A-Za-z0-9_-]+$")
     if (!pluginName.matches(pluginNameRegex)) {
@@ -528,7 +528,7 @@ fun main(rawArgs: Array<String>) {
 }
 
 fun runList(entrypoint: Entrypoint): Int {
-  entrypoint.verifyAllowedOption("--list", listOf())
+  entrypoint.verifyOptions("--list", listOf())
   if (entrypoint.subcommand != null) {
     throw UsageError("`stoic --list` doesn't take positional arguments")
   } else if (entrypoint.isTool) {
@@ -537,39 +537,49 @@ fun runList(entrypoint: Entrypoint): Int {
       println(it)
     }
   } else {
-    // TODO: Invoke builtin stoic-list to get list of builtin plugins (and allow --package)
-
-    val dexJarFilter = object : FileFilter {
-      override fun accept(file: File): Boolean {
-        return file.isFile && file.name.endsWith(".dex.jar")
-      }
-    }
-
-    entrypoint.resolveAllowed()
-
-    if (entrypoint.userAllowed) {
-      val usrSourceDirs = File(stoicHostUsrPluginSrcDir).listFiles()!!
-      usrSourceDirs.forEach {
-        if (!it.name.startsWith(".")) {
-          println(it.name)
-        }
-      }
-
-      val usrPrebuilts = File("$stoicHostUsrSyncDir/plugins").listFiles(dexJarFilter)!!
-      usrPrebuilts.forEach {
-        println(it.name.removeSuffix(".dex.jar"))
-      }
-    }
-
-    if (entrypoint.demoAllowed) {
-      val demoPrebuilts = File("$stoicHostCoreSyncDir/plugins").listFiles(dexJarFilter)!!
-      demoPrebuilts.forEach {
-        println(it.name.removeSuffix(".dex.jar"))
-      }
+    val pluginList = gatherPluginList(entrypoint)
+    pluginList.forEach {
+      println(it)
     }
   }
 
   return 0
+}
+
+fun gatherPluginList(entrypoint: Entrypoint): List<String> {
+  // TODO: Invoke builtin stoic-list to get list of builtin plugins (and allow --package)
+  val pluginList = mutableListOf<String>()
+
+  val dexJarFilter = object : FileFilter {
+    override fun accept(file: File): Boolean {
+      return file.isFile && file.name.endsWith(".dex.jar")
+    }
+  }
+
+  entrypoint.resolveAllowed()
+
+  if (entrypoint.userAllowed) {
+    val usrSourceDirs = File(stoicHostUsrPluginSrcDir).listFiles()!!
+    usrSourceDirs.forEach {
+      if (!it.name.startsWith(".")) {
+        pluginList.add("${it.name} (--user)")
+      }
+    }
+
+    val usrPrebuilts = File("$stoicHostUsrSyncDir/plugins").listFiles(dexJarFilter)!!
+    usrPrebuilts.forEach {
+      pluginList.add("${it.name.removeSuffix(".dex.jar")} (--user)")
+    }
+  }
+
+  if (entrypoint.demoAllowed) {
+    val demoPrebuilts = File("$stoicHostCoreSyncDir/plugins").listFiles(dexJarFilter)!!
+    demoPrebuilts.forEach {
+      pluginList.add("${it.name.removeSuffix(".dex.jar")} (--demo)")
+    }
+  }
+
+  return pluginList
 }
 
 fun runTool(entrypoint: Entrypoint): Int {
@@ -590,10 +600,14 @@ fun runTool(entrypoint: Entrypoint): Int {
     else -> {
       if (entrypoint.isTool) {
         // The user was definitely trying to run a tool
-        throw PithyException("tool `$toolName` not found.")
+        throw PithyException("tool `$toolName` not found, to see list: stoic --tool --list")
       } else {
         // Maybe the user was trying to run a plugin
-        throw PithyException("plugin or tool `$toolName` not found.")
+        throw PithyException("""
+          plugin or tool `$toolName` not found, to see list:
+          stoic --tool --list (for tools)
+          stoic --list (for plugins)
+          """.trimIndent())
       }
     }
   }
@@ -861,28 +875,28 @@ fun shellEscapeCmd(cmdArgs: List<String>): String {
 }
 
 fun resolveUserOrDemo(entrypoint: Entrypoint): Pair<File, String>? {
-  val pluginModule = entrypoint.subcommand!!
-  logDebug { "Attempting to resolve '$pluginModule'" }
+  val pluginName = entrypoint.subcommand!!
+  logDebug { "Attempting to resolve '$pluginName'" }
   if (listOf(entrypoint.isDemo, entrypoint.isBuiltin, entrypoint.isUser).count { it } > 1) {
     throw PithyException("At most one of --demo/--builtin/--user may be specified")
   }
 
-  if (pluginModule.endsWith(".jar")) {
+  if (pluginName.endsWith(".jar")) {
     if (!entrypoint.userAllowed) {
       throw PithyException("jar plugin are considered user - --demo/--builtin options are incompatible")
     }
 
-    val file = File(pluginModule)
+    val file = File(pluginName)
     if (!file.exists()) {
-      throw PithyException("File not found: $pluginModule")
+      throw PithyException("File not found: $pluginName")
     }
 
     return DexJarCache.resolve(file)
   }
 
-  val pluginDexJar = "$pluginModule.dex.jar"
+  val pluginDexJar = "$pluginName.dex.jar"
   if (entrypoint.userAllowed) {
-    val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginModule"
+    val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginName"
     if (File(usrPluginSrcDir).exists()) {
       val jarPath = logBlock(LogLevel.INFO, { "building $usrPluginSrcDir" }) {
         logInfo { "building plugin" }
@@ -910,7 +924,7 @@ fun resolveUserOrDemo(entrypoint: Entrypoint): Pair<File, String>? {
     if (usrPluginDexJar.exists()) {
       return DexJarCache.resolve(usrPluginDexJar)
     } else if (entrypoint.isUser) {
-      throw PithyException("User plugin `$pluginModule` not found.")
+      throw PithyException("User plugin `$pluginName` not found, to see list: stoic --list --user")
     }
   }
 
@@ -919,7 +933,7 @@ fun resolveUserOrDemo(entrypoint: Entrypoint): Pair<File, String>? {
     if (corePluginDexJar.exists()) {
       return DexJarCache.resolve(corePluginDexJar)
     } else if (entrypoint.isDemo) {
-      throw PithyException("Demo plugin `$pluginModule` not found.")
+      throw PithyException("Demo plugin `$pluginName` not found, to see list: stoic --list --demo")
     }
   }
 
