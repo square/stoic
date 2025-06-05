@@ -1,6 +1,6 @@
 # Stoic config
 Stoic configuration lives in `~/.config/stoic`. This directory will be
-automatically created when you run `stoic tool setup`.
+automatically created when you run `stoic init-config`.
 
 You can add stuff to `~/.config/stoic/sync` and it will be automatically synced (via
 rsync) to any device you connect to with stoic, in the directory identified by

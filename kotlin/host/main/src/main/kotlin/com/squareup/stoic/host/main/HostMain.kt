@@ -52,8 +52,8 @@ import kotlin.system.exitProcess
 
 var isGraal: Boolean = false
 
-// Setup populates th usr dirs
-// TODO: we should publish our SDK jars to maven instead of copying them during setup
+// init-config populates th usr dirs
+// TODO: we should publish our SDK jars to maven instead of copying them during init-config
 lateinit var stoicHostUsrConfigDir: String
 lateinit var stoicHostUsrSyncDir: String
 lateinit var stoicHostUsrPluginSrcDir: String
@@ -112,7 +112,7 @@ class Entrypoint : CliktCommand(
       e.g. stoic helloworld "this is one arg" "this is a second arg"
 
       Special functionality is available via `stoic --tool <tool-name> <tool-args>` - for details,
-      see `stoic --tool list`
+      see `stoic --list --tool`
     """.trimIndent()
   }
 
@@ -275,7 +275,7 @@ class Entrypoint : CliktCommand(
   }
 }
 
-class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic --tool shell") {
+class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic shell") {
   init { context { allowInterspersedArgs = false } }
   override fun help(context: Context): String {
     return """
@@ -287,7 +287,7 @@ class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic --to
  
         STOIC_DEVICE_SYNC_DIR (this will be set to $stoicDeviceSyncDir)
         STOIC_TTY_OPTION (this will be set to one of -t/-tt/-T depending on the invocation of
-        `stoic tool shell`)
+        `stoic shell`)
 
     """.trimIndent()
   }
@@ -364,14 +364,14 @@ class RsyncCommand(val entrypoint: Entrypoint) : CoreCliktCommand(name = "rsync"
     return """
       rsync to/from an Android device over adb, where Android paths are prefixed with `adb:`
 
-      `stoic tool rsync` is powered by actual rsync, so it supports the same options. Run
+      `stoic rsync` is powered by actual rsync, so it supports the same options. Run
       `rsync --help` to see details.
 
       e.g. to sync a hypothetical docs directory from your laptop to your Android device:
-      `stoic tool rsync --archive docs/ adb:/data/local/tmp/docs/`
+      `stoic rsync --archive docs/ adb:/data/local/tmp/docs/`
 
       e.g. to sync a hypothetical docs directory from your Android device to your laptop:
-      `stoic tool rsync --archive adb:/data/local/tmp/docs/ docs/`
+      `stoic rsync --archive adb:/data/local/tmp/docs/ docs/`
     """.trimIndent()
   }
 
@@ -384,7 +384,7 @@ class RsyncCommand(val entrypoint: Entrypoint) : CoreCliktCommand(name = "rsync"
   }
 }
 
-class SetupCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic --tool setup") {
+class InitConfigCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic init-config") {
   override fun help(context: Context): String {
     return """
       initializes ~/.config/stoic
@@ -392,7 +392,7 @@ class SetupCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic --to
   }
 
   override fun run() {
-    entrypoint.verifyAllowedOption("setup", listOf("--verbose", "--debug"))
+    entrypoint.verifyAllowedOption("init-config", listOf("--verbose", "--debug"))
 
     val buildToolsVersion = StoicProperties.ANDROID_BUILD_TOOLS_VERSION
     val targetApiLevel = StoicProperties.ANDROID_TARGET_SDK
@@ -416,7 +416,7 @@ class SetupCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic --to
       .inheritIO().waitFor(0)
 
     println("""
-      Setup complete!
+      User config initialized!
       
       Complete the following tutorial steps to familiarize yourself with Stoic:
       1. Connect an Android device (if you haven't done so already)
@@ -429,15 +429,15 @@ class SetupCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic --to
          e) Project -> plugin -> scratch -> Main.kt
          f) Make some edits and save
          g) Run `stoic scratch` again.
-      4. Run `stoic tool shell`
+      4. Run `stoic shell`
          a) Add configuration/utilities to ~/.config/stoic/sync and it will be available on any device
-            you `stoic tool shell` into.
+            you `stoic shell` into.
       5. Run `stoic --pkg *package* appexitinfo`, replacing `*package*` with your own Android app.
     """.trimIndent())
   }
 }
 
-class NewPluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic --tool new-plugin") {
+class NewPluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic new-plugin") {
   override fun help(context: Context): String {
     return """
       Create a new plugin
@@ -533,7 +533,7 @@ fun runList(entrypoint: Entrypoint): Int {
     throw UsageError("`stoic --list` doesn't take positional arguments")
   } else if (entrypoint.isTool) {
     // TODO: deduplicate this list with the one in runTool
-    listOf("shell", "rsync", "setup", "new-plugin").forEach {
+    listOf("shell", "rsync", "init-config", "new-plugin").forEach {
       println(it)
     }
   } else {
@@ -577,7 +577,7 @@ fun runTool(entrypoint: Entrypoint): Int {
   val command = when (toolName) {
     "shell" -> ShellCommand(entrypoint)
     "rsync" -> RsyncCommand(entrypoint)
-    "setup" -> SetupCommand(entrypoint)
+    "init-config" -> InitConfigCommand(entrypoint)
     "new-plugin" -> NewPluginCommand(entrypoint)
     "help" -> {
       entrypoint.echoFormattedHelp()
@@ -833,7 +833,7 @@ fun syncDevice() {
   logInfo { "syncing device ..." }
   val opts = listOf("--archive", "--delete")
 
-  // This won't necessarily exist - need to run `stoic tool setup`
+  // This won't necessarily exist - need to run `stoic init-config`
   val maybeUsrSyncDir = if (File(stoicHostUsrSyncDir).exists()) {
     listOf("$stoicHostUsrSyncDir/")
   } else {

@@ -6,7 +6,7 @@ if [ $# -eq 0 ]; then
   # Emit a greeting if the shell is being used interactively
   if [ "$(basename "$script_dir")" = "usr_config" ]; then
     >&2 cat << EOF
-Welcome to \`stoic --tool shell\`. Please run \`stoic --tool setup\` to enable shell customization.
+Welcome to \`stoic --tool shell\`. Please run \`stoic init-config\` to enable shell customization.
 EOF
   else
     >&2 cat << EOF
