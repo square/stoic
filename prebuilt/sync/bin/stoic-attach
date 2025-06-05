@@ -113,7 +113,7 @@ fi
 pkg_stoic_dir="$pkg_dir/stoic"
 pkg_socat="$pkg_stoic_dir/socat"
 pkg_so="$pkg_stoic_dir/stoic.so"
-pkg_server_dex_jar="$pkg_stoic_dir/android-server-injected.dex.jar"
+pkg_server_dex_jar="$pkg_stoic_dir/android-server-attached.dex.jar"
 pkg_options_json="$pkg_stoic_dir/options.json"
 
 >&2 echo "cleaning $pkg_stoic_dir"
@@ -121,7 +121,7 @@ run_as_compat "$pkg" rm -rf "$pkg_stoic_dir"
 run_as_compat "$pkg" mkdir "$pkg_stoic_dir"
 cross_uid_cp 777 "$stoic_device_sync_dir/bin/socat" "$pkg_socat"
 cross_uid_cp 444 "$stoic_device_sync_dir/stoic/stoic.so" "$pkg_so"
-cross_uid_cp 444 "$stoic_device_sync_dir/stoic/android-server-injected.dex.jar" "$pkg_server_dex_jar"
+cross_uid_cp 444 "$stoic_device_sync_dir/stoic/android-server-attached.dex.jar" "$pkg_server_dex_jar"
 echo "{\"stoicVersion\":$stoic_protocol_version}" | cross_uid_cp 444 - "$pkg_options_json"
 
 run_as_compat "$pkg" "$pkg_socat" -t 15 ABSTRACT-LISTEN:"$server_up_uds",reuseaddr EXEC:/bin/cat >&2 &

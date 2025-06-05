@@ -71,7 +71,7 @@ export GRAALVM_HOME
   :host:main:assemble \
   :host:main:nativeCompile \
   :android:plugin-sdk:assemble \
-  :android:server:injected:dexJar \
+  :android:server:attached:dexJar \
   :demo-plugin:helloworld:dexJar \
   :demo-plugin:appexitinfo:dexJar \
   :demo-plugin:breakpoint:dexJar \
@@ -83,9 +83,10 @@ cp host/main/build/libs/main.jar "$stoic_release_dir"/jar/stoic-host-main.jar
 cp host/main/build/native/nativeCompile/stoic "$stoic_release_dir"/bin/
 cp android/plugin-sdk/build/libs/plugin-sdk.jar "$stoic_release_dir"/jar/stoic-android-plugin-sdk.jar
 cp android/plugin-sdk/build/libs/plugin-sdk-sources.jar "$stoic_release_dir"/jar/stoic-android-plugin-sdk-sources.jar
-cp android/server/injected/build/libs/injected.dex.jar "$stoic_core_sync_dir/stoic/android-server-injected.dex.jar"
+cp android/server/attached/build/libs/attached.dex.jar "$stoic_core_sync_dir/stoic/android-server-attached.dex.jar"
 cp demo-app/without-sdk/build/outputs/apk/debug/without-sdk-debug.apk "$stoic_core_sync_dir/apk/demo-app-without-sdk-debug.apk"
 
+# TODO: Find a better location fo demo plugins - we don't need to sync them to the device anymore
 plugins_dir="$stoic_core_sync_dir/plugins"
 cp demo-plugin/appexitinfo/build/libs/appexitinfo.dex.jar "$plugins_dir"/
 cp demo-plugin/breakpoint/build/libs/breakpoint.dex.jar "$plugins_dir"/

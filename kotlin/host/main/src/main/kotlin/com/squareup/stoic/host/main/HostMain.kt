@@ -596,6 +596,8 @@ fun runPlugin(entrypoint: Entrypoint): Int {
   // force start the server, and then retry
   logInfo { "starting server via slow-path" }
 
+  // TODO: this syncDevice is not usually necessary, and it adds 300-400ms
+  //   it'd be better to pass some hash to stoic-attach and have it do an up-to-date check
   syncDevice()
 
   val startOption = if (entrypoint.restartApp) {

@@ -17,7 +17,7 @@ dependencyResolutionManagement {
 
 include("android:common")
 include("android:server:core")
-include("android:server:injected")
+include("android:server:attached")
 include("android:server:sdk")
 include("android:plugin-sdk")
 include("bridge")
