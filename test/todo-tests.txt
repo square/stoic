@@ -1,7 +1,8 @@
-- `stoic tool shell` where stdin is not connected to a TTY
-- adb root, stoic tool shell, adb unroot, stoic tool shell (today it messes up permissions)
+- `stoic --tool shell` where stdin is not connected to a TTY
+- adb root, stoic --tool shell, adb unroot, stoic --tool shell (today it messes
+  up permissions)
   - probably I need arsync-wrapper to check if its root and adjust permissions
     if so
-- `stoic tool rsync`
+- `stoic --tool rsync`
   - especially when there is a file that's at least a few megabytes big since
     that can cause issues if --blocking-io is not passed

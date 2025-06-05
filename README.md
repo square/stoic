@@ -48,7 +48,7 @@ device or emulator, pre-configured according to your custom `bashrc`/`vimrc`/etc
 3. When you don't specify a package, Stoic injects itself into `com.squareup.stoic.demoapp.withoutsdk`
    by default - a simple app bundled with Stoic. Run `stoic --pkg <your-app> helloworld` to inject into your
    own app instead.
-4. Setup configuration: `stoic tool setup` (this initializes `~/.config/stoic`)
+4. Setup configuration: `stoic --tool setup` (this initializes `~/.config/stoic`)
 5. Run a plugin that you can modify: `stoic scratch`
 6. Open up `~/.config/stoic/plugin` with Android Studio to modify this plugin and explore what Stoic can do.
 

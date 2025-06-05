@@ -4,11 +4,12 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.CliktError
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.CoreCliktCommand
+import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.main
-import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
+import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.OptionDelegate
 import com.github.ajalt.clikt.parameters.options.OptionWithValues
 import com.github.ajalt.clikt.parameters.options.RawOption
@@ -61,12 +62,35 @@ lateinit var stoicHostUsrSdkDir: String
 lateinit var stoicReleaseDir: String
 lateinit var stoicHostScriptDir: String
 lateinit var stoicHostCoreSyncDir: String
+var androidSerial: String? = null
 
-lateinit var adbSerial: String
+val adbSerial: String by lazy {
+  androidSerial ?: run {
+    val serialFromEnv = System.getenv("ANDROID_SERIAL")
+    serialFromEnv
+      ?: try {
+        ProcessBuilder("adb", "get-serialno").stdout(0)
+      } catch (e: FailedExecException) {
+        e.errorOutput?.let {
+          // This is probably just a message saying either
+          //   "error: more than one device/emulator"
+          // or
+          //   "adb: no devices/emulators found"
+          throw PithyException(it)
+        } ?: run {
+          throw e
+        }
+      }
+  }
+}
+
 
 class Entrypoint : CliktCommand(
   name = "stoic",
 ) {
+  companion object {
+    const val DEFAULT_PACKAGE = "com.squareup.stoic.demoapp.withoutsdk"
+  }
   init {
     context { allowInterspersedArgs = false }
     versionOption(
@@ -87,18 +111,18 @@ class Entrypoint : CliktCommand(
 
       e.g. stoic helloworld "this is one arg" "this is a second arg"
 
-      Special functionality is available via `stoic tool <tool-name> <tool-args>` - for details, see
-      `stoic tool --help`
+      Special functionality is available via `stoic --tool <tool-name> <tool-args>` - for details,
+      see `stoic --tool list`
     """.trimIndent()
   }
 
   // Track which options were explicitly set
   private val specifiedOptions = mutableSetOf<String>()
 
-  fun verifyAllowedOption(vararg allowedOptions: String) {
+  fun verifyAllowedOption(subcommand: String, allowedOptions: List<String>) {
     specifiedOptions.forEach {
       if (it !in allowedOptions) {
-        throw CliktError("--$it not allowed in this context")
+        throw UsageError("$it not allowed with $subcommand")
       }
     }
   }
@@ -148,7 +172,7 @@ class Entrypoint : CliktCommand(
     """.trimIndent()
   ).trackableFlag()
 
-  val androidSerial by option(
+  val androidSerialArg by option(
     "--android-serial",
     "--serial",
     "-s",
@@ -160,7 +184,7 @@ class Entrypoint : CliktCommand(
     "--pkg",
     "-p",
     help = "Specify the package of the process to connect to"
-  ).trackableOption().default("com.squareup.stoic.demoapp.withoutsdk")
+  ).trackableOption().default(DEFAULT_PACKAGE)
 
   val env by option(
     "--env",
@@ -181,8 +205,18 @@ class Entrypoint : CliktCommand(
     "--usr",
     help = "limit plugin resolution to user plugins"
   ).trackableFlag()
+  val isTool by option(
+    "--tool",
+    "-t",
+    help = "run a tool - see `stoic --tool --list` for details"
+  ).flag()
+  val isList by option(
+    "--list",
+    "-l",
+    help = "list plugins (pass --tool to list tools)"
+  ).flag()
 
-  val subcommand by argument(name = "plugin")
+  val subcommand by argument(name = "plugin").optional()
   val subcommandArgs by argument(name = "plugin-args").multiple()
 
   var demoAllowed = false
@@ -190,21 +224,29 @@ class Entrypoint : CliktCommand(
   var userAllowed = false
 
   fun resolveAllowed() {
-    if (isDemo) {
+    val count = listOf(isDemo, isBuiltin, isUser).count { it }
+    if (count == 0) {
+      demoAllowed = true
+      builtinAllowed = true
+      userAllowed = true
+    } else if (count > 1) {
+      throw UsageError("--demo/--builtin/--user are mutually exclusive")
+    } else if (isTool) {
+      throw UsageError("--tool is invalid with --demo/--builtin/--user")
+    } else if (isDemo) {
       demoAllowed = true
     } else if (isBuiltin) {
       builtinAllowed = true
     } else if (isUser) {
-      userAllowed = true
-    } else {
-      demoAllowed = true
-      builtinAllowed = true
       userAllowed = true
     }
   }
 
   override fun run() {
     resolveAllowed()
+
+    // We need to store this globally since we use it to resolve which device we connect to
+    androidSerial = androidSerialArg
 
     if (restartApp && noStartIfNeeded) {
       throw CliktError("--restart-app and --no-start-if-needed are mutually exclusive")
@@ -214,36 +256,26 @@ class Entrypoint : CliktCommand(
       throw CliktError("--verbose and --debug are mutually exclusive")
     }
 
-    if (verbose) {
-      minLogLevel = LogLevel.VERBOSE
+    minLogLevel = if (verbose) {
+      LogLevel.VERBOSE
     } else if (debug) {
-      minLogLevel = LogLevel.DEBUG
+      LogLevel.DEBUG
     } else if (info) {
-      minLogLevel = LogLevel.INFO
+      LogLevel.INFO
     } else {
-      minLogLevel = LogLevel.WARN
+      LogLevel.WARN
     }
-
 
     logDebug { "isGraal=$isGraal" }
 
-    when (subcommand) {
-      "tool" -> {
-        runTool(this)
-      }
-      else -> {
-        resolveAdbSerial(androidSerial)
-
-        val exitCode = runPlugin(this)
-        if (exitCode != 0) {
-          throw PithyException(null, exitCode)
-        }
-      }
+    val exitCode = runPluginOrTool(this)
+    if (exitCode != 0) {
+      throw PithyException(null, exitCode)
     }
   }
 }
 
-class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "shell") {
+class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic --tool shell") {
   init { context { allowInterspersedArgs = false } }
   override fun help(context: Context): String {
     return """
@@ -265,10 +297,11 @@ class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "shell") {
   val tty by option("--tty", "-t").flag()
   val forceTty by option("--force-tty", "-tt").flag()
   val disableTty by option("--disable-tty", "-T").flag()
+  val noSync by option("--no-sync", "-n").flag()
+  val defaultConfig by option("--default-config", "-d").flag()
 
   override fun run() {
-    entrypoint.verifyAllowedOption("--verbose", "--debug", "--android-serial")
-    resolveAdbSerial(entrypoint.androidSerial)
+    entrypoint.verifyAllowedOption("shell", listOf("--verbose", "--debug", "--android-serial"))
 
     if (listOf(tty, forceTty, disableTty).count { it } > 1) {
       throw CliktError("-t, -tt, and -T are mutually exclusive")
@@ -289,11 +322,18 @@ class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "shell") {
       if (shellArgs.isEmpty() && System.console() != null) { "-tt" } else { "-T" }
     }
 
-    syncDevice()
+    if (!noSync) {
+      syncDevice()
+    }
 
     val usrShellSh = "$stoicHostUsrConfigDir/shell.sh" // might not exist
     val prebuiltShellSh = "$stoicReleaseDir/template/usr_config/shell.sh"
-    val shellSh = if (File(usrShellSh).exists()) { usrShellSh } else { prebuiltShellSh }
+    val shellSh = if (!defaultConfig && File(usrShellSh).exists()) {
+      usrShellSh
+    } else {
+      prebuiltShellSh
+    }
+
     try {
       runCommand(
         listOf("sh", shellSh) + shellArgs,
@@ -338,14 +378,13 @@ class RsyncCommand(val entrypoint: Entrypoint) : CoreCliktCommand(name = "rsync"
   val rsyncArgs by argument().multiple()
 
   override fun run() {
-    entrypoint.verifyAllowedOption("--verbose", "--debug", "--android-serial")
-    resolveAdbSerial(entrypoint.androidSerial)
+    entrypoint.verifyAllowedOption("rsync", listOf("--verbose", "--debug", "--android-serial"))
 
     arsync(rsyncArgs)
   }
 }
 
-class SetupCommand(val entrypoint: Entrypoint) : CliktCommand(name = "setup") {
+class SetupCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic --tool setup") {
   override fun help(context: Context): String {
     return """
       initializes ~/.config/stoic
@@ -353,7 +392,7 @@ class SetupCommand(val entrypoint: Entrypoint) : CliktCommand(name = "setup") {
   }
 
   override fun run() {
-    entrypoint.verifyAllowedOption("--verbose", "--debug")
+    entrypoint.verifyAllowedOption("setup", listOf("--verbose", "--debug"))
 
     val buildToolsVersion = StoicProperties.ANDROID_BUILD_TOOLS_VERSION
     val targetApiLevel = StoicProperties.ANDROID_TARGET_SDK
@@ -398,66 +437,7 @@ class SetupCommand(val entrypoint: Entrypoint) : CliktCommand(name = "setup") {
   }
 }
 
-class ToolCommand : CliktCommand(name = "stoic tool") {
-  init {
-    context { allowInterspersedArgs = false }
-    versionOption(
-      version = StoicProperties.STOIC_VERSION_NAME,
-      names = setOf("-v", "--version")
-    )
-  }
-
-  override fun help(context: Context): String {
-    return """
-      Run a special command - for details, see: `stoic tool <command-name> --help`
-    """.trimIndent()
-  }
-
-  override fun run() {
-    logDebug { "ToolCommand.run" }
-  }
-}
-
-class ListCommand(val entrypoint: Entrypoint) : CliktCommand(name = "list") {
-  override fun help(context: Context): String {
-    return """
-      List available stoic plugins
-    """.trimIndent()
-  }
-
-  override fun run() {
-    // TODO: Invoke builtin stoic-list to get list of builtin plugins
-
-    val dexJarFilter = object: FileFilter {
-      override fun accept(file: File): Boolean {
-        return file.isFile && file.name.endsWith(".dex.jar")
-      }
-    }
-
-    entrypoint.resolveAllowed()
-
-    if (entrypoint.userAllowed) {
-      val usrSourceDirs = File(stoicHostUsrPluginSrcDir).listFiles()!!
-      usrSourceDirs.forEach {
-        println(it.name)
-      }
-
-      val usrPrebuilts = File("$stoicHostUsrSyncDir/plugins").listFiles(dexJarFilter)!!
-      usrPrebuilts.forEach {
-        println(it.name.removeSuffix(".dex.jar"))
-      }
-    }
-
-    if (entrypoint.demoAllowed) {
-      val demoPrebuilts = File("$stoicHostCoreSyncDir/plugins").listFiles(dexJarFilter)!!
-      demoPrebuilts.forEach {
-        println(it.name.removeSuffix(".dex.jar"))
-      }
-    }
-  }
-}
-
-class NewPluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "new-plugin") {
+class NewPluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic --tool new-plugin") {
   override fun help(context: Context): String {
     return """
       Create a new plugin
@@ -467,7 +447,7 @@ class NewPluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "new-pl
   val pluginName by argument("name")
 
   override fun run() {
-    entrypoint.verifyAllowedOption("--verbose", "--debug")
+    entrypoint.verifyAllowedOption("new-plugin", listOf("--verbose", "--debug"))
 
     val pluginNameRegex = Regex("^[A-Za-z0-9_-]+$")
     if (!pluginName.matches(pluginNameRegex)) {
@@ -547,15 +527,79 @@ fun main(rawArgs: Array<String>) {
   }
 }
 
-fun runTool(entrypoint: Entrypoint) {
-  ToolCommand()
-    .subcommands(
-      ShellCommand(entrypoint),
-      RsyncCommand(entrypoint),
-      SetupCommand(entrypoint),
-      ListCommand(entrypoint),
-      NewPluginCommand(entrypoint),
-    ).main(entrypoint.subcommandArgs)
+fun runList(entrypoint: Entrypoint): Int {
+  entrypoint.verifyAllowedOption("--list", listOf())
+  if (entrypoint.subcommand != null) {
+    throw UsageError("`stoic --list` doesn't take positional arguments")
+  } else if (entrypoint.isTool) {
+    // TODO: deduplicate this list with the one in runTool
+    listOf("shell", "rsync", "setup", "new-plugin").forEach {
+      println(it)
+    }
+  } else {
+    // TODO: Invoke builtin stoic-list to get list of builtin plugins (and allow --package)
+
+    val dexJarFilter = object : FileFilter {
+      override fun accept(file: File): Boolean {
+        return file.isFile && file.name.endsWith(".dex.jar")
+      }
+    }
+
+    entrypoint.resolveAllowed()
+
+    if (entrypoint.userAllowed) {
+      val usrSourceDirs = File(stoicHostUsrPluginSrcDir).listFiles()!!
+      usrSourceDirs.forEach {
+        if (!it.name.startsWith(".")) {
+          println(it.name)
+        }
+      }
+
+      val usrPrebuilts = File("$stoicHostUsrSyncDir/plugins").listFiles(dexJarFilter)!!
+      usrPrebuilts.forEach {
+        println(it.name.removeSuffix(".dex.jar"))
+      }
+    }
+
+    if (entrypoint.demoAllowed) {
+      val demoPrebuilts = File("$stoicHostCoreSyncDir/plugins").listFiles(dexJarFilter)!!
+      demoPrebuilts.forEach {
+        println(it.name.removeSuffix(".dex.jar"))
+      }
+    }
+  }
+
+  return 0
+}
+
+fun runTool(entrypoint: Entrypoint): Int {
+  val toolName = entrypoint.subcommand
+  val command = when (toolName) {
+    "shell" -> ShellCommand(entrypoint)
+    "rsync" -> RsyncCommand(entrypoint)
+    "setup" -> SetupCommand(entrypoint)
+    "new-plugin" -> NewPluginCommand(entrypoint)
+    "help" -> {
+      entrypoint.echoFormattedHelp()
+      return 0
+    }
+    "version" -> {
+      entrypoint.echo("stoic version ${StoicProperties.STOIC_VERSION_NAME}")
+      return 0
+    }
+    else -> {
+      if (entrypoint.isTool) {
+        // The user was definitely trying to run a tool
+        throw PithyException("tool `$toolName` not found.")
+      } else {
+        // Maybe the user was trying to run a plugin
+        throw PithyException("plugin or tool `$toolName` not found.")
+      }
+    }
+  }
+
+  command.main(entrypoint.subcommandArgs)
+  return 0
 }
 
 fun runPluginFastPath(entrypoint: Entrypoint, dexJarInfo: Pair<File, String>?): Int {
@@ -570,7 +614,7 @@ fun runPluginFastPath(entrypoint: Entrypoint, dexJarInfo: Pair<File, String>?): 
         pkg = entrypoint.pkg,
         restartApp = entrypoint.restartApp,
         startIfNeeded = !entrypoint.noStartIfNeeded,
-        pluginModule = entrypoint.subcommand,
+        pluginModule = entrypoint.subcommand!!,
         pluginArgs = entrypoint.subcommandArgs,
         pluginEnvVars = entrypoint.env.toMap(),
       )
@@ -582,9 +626,40 @@ fun runPluginFastPath(entrypoint: Entrypoint, dexJarInfo: Pair<File, String>?): 
   }
 }
 
-fun runPlugin(entrypoint: Entrypoint): Int {
-  val dexJarInfo = resolvePluginModule(entrypoint)
+fun runPluginOrTool(entrypoint: Entrypoint): Int {
+  if (entrypoint.isList) {
+    return runList(entrypoint)
+  } else if (entrypoint.isTool) {
+    return runTool(entrypoint)
+  }
 
+  // If resolvePluginModule returns null then we'll try assuming its a builtin (if we resolved the
+  // device) if that fails, then we'll check for a tool
+  val dexJarInfo = resolveUserOrDemo(entrypoint)
+
+  val isPlugin = if (dexJarInfo != null || entrypoint.isBuiltin) {
+    true
+  } else if (entrypoint.pkg != Entrypoint.DEFAULT_PACKAGE) {
+    // Tools don't take pkg as argument, so it must be a plugin
+    true
+  } else if (entrypoint.commandName in listOf("stoic-list", "stoic-status", "stoic-noop")) {
+    // We know the list of plugins that the default package supports - if the command is on that
+    // list, then it's a plugin
+    // TODO: validate this list is sync'd with the actual supported plugins
+    true
+  } else {
+    // Otherwise it's not a plugin
+    false
+  }
+
+  return if (isPlugin) {
+    runPlugin(entrypoint, dexJarInfo)
+  } else {
+    runTool(entrypoint)
+  }
+}
+
+fun runPlugin(entrypoint: Entrypoint, dexJarInfo: Pair<File, String>?): Int {
   if (!entrypoint.restartApp) {
     try {
       return runPluginFastPath(entrypoint, dexJarInfo)
@@ -785,8 +860,8 @@ fun shellEscapeCmd(cmdArgs: List<String>): String {
   }
 }
 
-fun resolvePluginModule(entrypoint: Entrypoint): Pair<File, String>? {
-  val pluginModule = entrypoint.subcommand
+fun resolveUserOrDemo(entrypoint: Entrypoint): Pair<File, String>? {
+  val pluginModule = entrypoint.subcommand!!
   logDebug { "Attempting to resolve '$pluginModule'" }
   if (listOf(entrypoint.isDemo, entrypoint.isBuiltin, entrypoint.isUser).count { it } > 1) {
     throw PithyException("At most one of --demo/--builtin/--user may be specified")
@@ -834,6 +909,8 @@ fun resolvePluginModule(entrypoint: Entrypoint): Pair<File, String>? {
     val usrPluginDexJar = File("$stoicHostUsrSyncDir/plugins/$pluginDexJar")
     if (usrPluginDexJar.exists()) {
       return DexJarCache.resolve(usrPluginDexJar)
+    } else if (entrypoint.isUser) {
+      throw PithyException("User plugin `$pluginModule` not found.")
     }
   }
 
@@ -841,38 +918,12 @@ fun resolvePluginModule(entrypoint: Entrypoint): Pair<File, String>? {
     val corePluginDexJar = File("$stoicHostCoreSyncDir/plugins/$pluginDexJar")
     if (corePluginDexJar.exists()) {
       return DexJarCache.resolve(corePluginDexJar)
+    } else if (entrypoint.isDemo) {
+      throw PithyException("Demo plugin `$pluginModule` not found.")
     }
   }
 
-  if (entrypoint.builtinAllowed) {
-    // We return null to indicate that the plugin should be resolved inside the server
-    return null
-  }
-
-  throw PithyException("plugin $pluginModule not found.")
-}
-
-
-private fun resolveAdbSerial(androidSerial: String?) {
-  adbSerial = if (androidSerial != null) {
-    androidSerial
-  } else {
-    val serialFromEnv = System.getenv("ANDROID_SERIAL")
-    serialFromEnv
-      ?: try {
-        ProcessBuilder("adb", "get-serialno").stdout(0)
-      } catch (e: FailedExecException) {
-        if (e.errorOutput != null) {
-          // This is probably just a message saying either
-          //   "error: more than one device/emulator"
-          // or
-          //   "adb: no devices/emulators found"
-          throw PithyException(e.errorOutput)
-        } else {
-          throw e
-        }
-      }
-  }
+  return null
 }
 
 fun adbProcessBuilder(vararg args: String): ProcessBuilder {

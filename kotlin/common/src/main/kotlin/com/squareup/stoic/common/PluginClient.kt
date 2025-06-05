@@ -61,6 +61,7 @@ class PluginClient(
 
     // Need to load plugin
     if (pluginDexJar == null) {
+      // TODO: Need to throw a sub-class of PithyException so we can catch it and try a tool instead
       throw PithyException(
         """
           Plugin not found: ${pluginParsedArgs.pluginModule}
