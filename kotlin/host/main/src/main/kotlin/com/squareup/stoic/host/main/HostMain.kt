@@ -415,6 +415,8 @@ class InitConfigCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic
     ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoic-android-plugin-sdk-sources.jar", "$stoicHostUsrSdkDir/")
       .inheritIO().waitFor(0)
 
+    newPlugin("scratch", ignoreExisting = true)
+
     println("""
       User config initialized!
       
@@ -449,37 +451,52 @@ class NewPluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic 
   override fun run() {
     entrypoint.verifyOptions("new-plugin", listOf("--verbose", "--debug"))
 
-    val pluginNameRegex = Regex("^[A-Za-z0-9_-]+$")
-    if (!pluginName.matches(pluginNameRegex)) {
-      throw PithyException("Plugin name must adhere to regex: ${pluginNameRegex.pattern}")
-    }
-
-    val usrPluginSrcDir = File("$stoicHostUsrPluginSrcDir/$pluginName")
-    val scratchSrcDir = File("$stoicReleaseDir/template/usr_config/plugin/scratch")
-
-    // Copy the scratch template plugin
-    ProcessBuilder(
-      "cp",
-      "-iR",
-      scratchSrcDir.absolutePath,
-      usrPluginSrcDir.absolutePath
-    ).inheritIO().waitFor(0)
-
-    // Replace "scratch" with the name of the plugin
-    check(ProcessBuilder.startPipeline(
-      listOf(
-        ProcessBuilder("grep", "--recursive", "--files-with-matches", "--null", "scratch", ".")
-          .directory(usrPluginSrcDir)
-          .redirectError(Redirect.INHERIT),
-        ProcessBuilder("xargs", "-0", "sed", "-i", "", "s/scratch/$pluginName/g")
-          .directory(usrPluginSrcDir)
-          .inheritIO()
-          .redirectInput(Redirect.PIPE)
-      )
-    ).all { it.waitFor() == 0 })
+    val usrPluginSrcDir = newPlugin(pluginName)
 
     System.err.println("New plugin src written to $usrPluginSrcDir")
   }
+}
+
+fun newPlugin(pluginName: String, ignoreExisting: Boolean = false): File {
+  val pluginNameRegex = Regex("^[A-Za-z0-9_-]+$")
+  if (!pluginName.matches(pluginNameRegex)) {
+    throw PithyException("Plugin name must adhere to regex: ${pluginNameRegex.pattern}")
+  }
+
+  // Ensure the parent directory has been created
+  File(stoicHostUsrPluginSrcDir).mkdirs()
+
+  val usrPluginSrcDir = File("$stoicHostUsrPluginSrcDir/$pluginName")
+  val scratchSrcDir = File("$stoicReleaseDir/template/scratch")
+
+  if (usrPluginSrcDir.exists() && ignoreExisting) {
+    return usrPluginSrcDir
+  }
+
+  // Copy the scratch template plugin
+  ProcessBuilder(
+    "cp",
+    "-iR",
+    scratchSrcDir.absolutePath,
+    usrPluginSrcDir.absolutePath
+  ).inheritIO().waitFor(0)
+
+  File(usrPluginSrcDir, ".stoic_template_version").writeText(StoicProperties.STOIC_VERSION_NAME)
+
+  // Replace "scratch" with the name of the plugin
+  check(ProcessBuilder.startPipeline(
+    listOf(
+      ProcessBuilder("grep", "--recursive", "--files-with-matches", "--null", "scratch", ".")
+        .directory(usrPluginSrcDir)
+        .redirectError(Redirect.INHERIT),
+      ProcessBuilder("xargs", "-0", "sed", "-i", "", "s/scratch/$pluginName/g")
+        .directory(usrPluginSrcDir)
+        .inheritIO()
+        .redirectInput(Redirect.PIPE)
+    )
+  ).all { it.waitFor() == 0 })
+
+  return usrPluginSrcDir
 }
 
 
