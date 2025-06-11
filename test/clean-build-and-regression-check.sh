@@ -16,7 +16,6 @@ if [ "$(realpath "$(which stoic)")" != "$(realpath "$script_dir/../out/rel/bin/s
 fi
 
 "$script_dir"/shellcheck.sh
-"$script_dir"/test-shell.sh
 "$script_dir"/test-demo-app-without-sdk.sh
 "$script_dir"/test-init-config.sh
 "$script_dir"/test-without-config.sh

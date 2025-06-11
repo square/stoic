@@ -33,13 +33,6 @@ You can write plugins that
 Stoic is fast. The first time you run a Stoic plugin in a process it will take 2-3
 seconds to attach. Thereafter, Stoic plugins typically run in less than a second.
 
-When you run Stoic on your laptop it syncs itself (via rsync over adb) to your
-Android device. Most of the functionality is actually run directly on your device,
-so you can run it directly from `adb shell` if you prefer. Anything inside of
-`~/.config/stoic/sync` will also be sync'd, so you can have all your favorite
-command-line utilities (`bash`, `vim`, etc) available whenever you connect to a new
-device or emulator, pre-configured according to your custom `bashrc`/`vimrc`/etc.
-
 
 ## Getting started
 
@@ -83,7 +76,7 @@ for (bitmap in jvmti.instances(Bitmap::class.java)) {
 
 The primary technologies powering Stoic are
 [JVMTI](https://en.wikipedia.org/wiki/Java_Virtual_Machine_Tools_Interface),
-Unix Domain Sockets, `socat`, `rsync`, and `run-as`.
+Unix Domain Sockets, `socat`, and `run-as`.
 
 The first time you run Stoic on a process it will attach a jvmti agent which
 will start a server inside the process. We connect to this server through a

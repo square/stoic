@@ -85,13 +85,6 @@ With additional effort, Stoic could support running plugins:
 5. On remote systems (via SSH)
 6. In iOS apps
 
-## stoic tool shell
-
-Somewhat accidentally, Stoic also syncs a set of utilities and configuration
-available whenever you shell into an existing system (`stoic tool shell`). This
-is only provided because stoic needs that internally, and it was easy to build
-on-top of rsync. 
-
 ## Injection
 
 Stoic currently injects code into Android apps via JVMTI, using the

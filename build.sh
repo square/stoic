@@ -13,10 +13,6 @@ mkdir -p "$stoic_release_dir"/jar
 mkdir -p "$stoic_release_dir"/bin
 rsync --archive "$stoic_dir"/prebuilt/ "$stoic_release_dir"/
 
-# Sets things up so that they are ready to be rsync'd to the device
-# Actual rsyncing is done via `install` (and it will happen automatically each
-# time a stoic command is run)
-
 for arg in "$@"; do
     case $arg in
         *)
@@ -87,12 +83,13 @@ cp android/server/attached/build/libs/attached.dex.jar "$stoic_core_sync_dir/sto
 cp demo-app/without-sdk/build/outputs/apk/debug/without-sdk-debug.apk "$stoic_core_sync_dir/apk/demo-app-without-sdk-debug.apk"
 
 # TODO: Find a better location fo demo plugins - we don't need to sync them to the device anymore
-plugins_dir="$stoic_core_sync_dir/plugins"
-cp demo-plugin/appexitinfo/build/libs/appexitinfo.dex.jar "$plugins_dir"/
-cp demo-plugin/breakpoint/build/libs/breakpoint.dex.jar "$plugins_dir"/
-cp demo-plugin/crasher/build/libs/crasher.dex.jar "$plugins_dir"/
-cp demo-plugin/helloworld/build/libs/helloworld.dex.jar "$plugins_dir"/
-cp demo-plugin/testsuite/build/libs/testsuite.dex.jar "$plugins_dir"/
+demo_plugins_dir="$stoic_release_dir/demo-plugins"
+mkdir -p "$demo_plugins_dir"
+cp demo-plugin/appexitinfo/build/libs/appexitinfo.dex.jar "$demo_plugins_dir"/
+cp demo-plugin/breakpoint/build/libs/breakpoint.dex.jar "$demo_plugins_dir"/
+cp demo-plugin/crasher/build/libs/crasher.dex.jar "$demo_plugins_dir"/
+cp demo-plugin/helloworld/build/libs/helloworld.dex.jar "$demo_plugins_dir"/
+cp demo-plugin/testsuite/build/libs/testsuite.dex.jar "$demo_plugins_dir"/
 
 cd "$stoic_dir/native"
 make -j16 all

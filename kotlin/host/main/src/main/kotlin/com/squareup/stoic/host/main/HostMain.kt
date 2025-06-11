@@ -33,6 +33,7 @@ import com.squareup.stoic.common.logBlock
 import com.squareup.stoic.common.logDebug
 import com.squareup.stoic.common.logError
 import com.squareup.stoic.common.logInfo
+import com.squareup.stoic.common.logWarn
 import com.squareup.stoic.common.minLogLevel
 import com.squareup.stoic.common.runCommand
 import com.squareup.stoic.common.serverSocketName
@@ -55,13 +56,12 @@ var isGraal: Boolean = false
 // init-config populates th usr dirs
 // TODO: we should publish our SDK jars to maven instead of copying them during init-config
 lateinit var stoicHostUsrConfigDir: String
-lateinit var stoicHostUsrSyncDir: String
 lateinit var stoicHostUsrPluginSrcDir: String
 lateinit var stoicHostUsrSdkDir: String
 
 lateinit var stoicReleaseDir: String
-lateinit var stoicHostScriptDir: String
-lateinit var stoicHostCoreSyncDir: String
+lateinit var stoicReleaseSyncDir: String
+lateinit var stoicDemoPluginsDir: String
 var androidSerial: String? = null
 
 val adbSerial: String by lazy {
@@ -277,79 +277,17 @@ class Entrypoint : CliktCommand(
 
 class ShellCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic shell") {
   init { context { allowInterspersedArgs = false } }
+  override val treatUnknownOptionsAsArgs = true
   override fun help(context: Context): String {
     return """
-      like `adb shell` but syncs directories and initializes the shell env
- 
-      If it exists, $stoicHostCoreSyncDir will be synced to $stoicDeviceSyncDir
-      If it exists, $stoicHostUsrConfigDir/shell.sh will be run to start the shell. You may
-      reference the following environment variables in your shell.sh:
- 
-        STOIC_DEVICE_SYNC_DIR (this will be set to $stoicDeviceSyncDir)
-        STOIC_TTY_OPTION (this will be set to one of -t/-tt/-T depending on the invocation of
-        `stoic shell`)
-
+      Stoic used to provide a shell command, but its unrelated to Stoic's core functionality, so
+      it has been removed.
     """.trimIndent()
   }
-
   val shellArgs by argument().multiple()
-
-  val tty by option("--tty", "-t").flag()
-  val forceTty by option("--force-tty", "-tt").flag()
-  val disableTty by option("--disable-tty", "-T").flag()
-  val noSync by option("--no-sync", "-n").flag()
-  val defaultConfig by option("--default-config", "-d").flag()
-
   override fun run() {
-    entrypoint.verifyOptions("shell", listOf("--verbose", "--debug", "--android-serial"))
-
-    if (listOf(tty, forceTty, disableTty).count { it } > 1) {
-      throw CliktError("-t, -tt, and -T are mutually exclusive")
-    }
-
-    // We attempt to preserve the meaning of -t/-tt/-T from `adb shell`.
-    // TODO: One small difference:
-    //   `adb shell` only takes into account whether stdin is connected to a tty, whereas
-    //   System.console() != null checks whether both stdin/stdout are connected to ttys.
-    val ttyOption = if (forceTty) {
-      "-tt"
-    } else if (disableTty) {
-      "-T"
-    } else if (tty) {
-      // Only use a tty if stdin is a tty
-      if (System.console() != null) { "-tt" } else { "-T" }
-    } else {
-      if (shellArgs.isEmpty() && System.console() != null) { "-tt" } else { "-T" }
-    }
-
-    if (!noSync) {
-      syncDevice()
-    }
-
-    val usrShellSh = "$stoicHostUsrConfigDir/shell.sh" // might not exist
-    val prebuiltShellSh = "$stoicReleaseDir/template/usr_config/shell.sh"
-    val shellSh = if (!defaultConfig && File(usrShellSh).exists()) {
-      usrShellSh
-    } else {
-      prebuiltShellSh
-    }
-
-    try {
-      runCommand(
-        listOf("sh", shellSh) + shellArgs,
-        envOverrides = mapOf(
-          "ANDROID_SERIAL" to adbSerial,
-          "STOIC_TTY_OPTION" to ttyOption,
-          "STOIC_DEVICE_SYNC_DIR" to stoicDeviceSyncDir,
-        ),
-        inheritIO = true
-      )
-    } catch (e: FailedExecException) {
-      logDebug { e.stackTraceToString() }
-
-      // TODO: throw something and exit all in one place
-      exitProcess(e.exitCode)
-    }
+    echoFormattedHelp()
+    throw CliktError()
   }
 }
 
@@ -362,25 +300,15 @@ class RsyncCommand(val entrypoint: Entrypoint) : CoreCliktCommand(name = "rsync"
   override val treatUnknownOptionsAsArgs = true
   override fun help(context: Context): String {
     return """
-      rsync to/from an Android device over adb, where Android paths are prefixed with `adb:`
-
-      `stoic rsync` is powered by actual rsync, so it supports the same options. Run
-      `rsync --help` to see details.
-
-      e.g. to sync a hypothetical docs directory from your laptop to your Android device:
-      `stoic rsync --archive docs/ adb:/data/local/tmp/docs/`
-
-      e.g. to sync a hypothetical docs directory from your Android device to your laptop:
-      `stoic rsync --archive adb:/data/local/tmp/docs/ docs/`
+      Stoic used to provide an rsync command, but its unrelated to Stoic's core functionality, so
+      it has been removed.
     """.trimIndent()
   }
 
   val rsyncArgs by argument().multiple()
-
   override fun run() {
-    entrypoint.verifyOptions("rsync", listOf("--verbose", "--debug", "--android-serial"))
-
-    arsync(rsyncArgs)
+    echoFormattedHelp()
+    throw CliktError()
   }
 }
 
@@ -401,7 +329,7 @@ class InitConfigCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic
       "build-tools;$buildToolsVersion",
       "platforms;android-$targetApiLevel")
 
-    ProcessBuilder("mkdir", "-p", stoicHostUsrSyncDir).inheritIO().waitFor(0)
+    ProcessBuilder("mkdir", "-p", stoicHostUsrConfigDir).inheritIO().waitFor(0)
     ProcessBuilder(
       "rsync",
       "--archive",
@@ -431,10 +359,7 @@ class InitConfigCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic
          e) Project -> plugin -> scratch -> Main.kt
          f) Make some edits and save
          g) Run `stoic scratch` again.
-      4. Run `stoic shell`
-         a) Add configuration/utilities to ~/.config/stoic/sync and it will be available on any device
-            you `stoic shell` into.
-      5. Run `stoic --pkg *package* appexitinfo`, replacing `*package*` with your own Android app.
+      4. Run `stoic --pkg *package* appexitinfo`, replacing `*package*` with your own Android app.
     """.trimIndent())
   }
 }
@@ -514,13 +439,12 @@ fun main(rawArgs: Array<String>) {
 
   minLogLevel = LogLevel.WARN
 
-  stoicHostScriptDir = "$stoicReleaseDir/script"
-  stoicHostCoreSyncDir = "$stoicReleaseDir/sync"
+  stoicReleaseSyncDir = "$stoicReleaseDir/sync"
+  stoicDemoPluginsDir = "$stoicReleaseDir/demo-plugins"
 
   stoicHostUsrConfigDir = System.getenv("STOIC_CONFIG").let {
     if (it.isNullOrBlank()) { "${System.getenv("HOME")}/.config/stoic" } else { it }
   }
-  stoicHostUsrSyncDir = "$stoicHostUsrConfigDir/sync"
   stoicHostUsrPluginSrcDir = "$stoicHostUsrConfigDir/plugin"
   stoicHostUsrSdkDir = "$stoicHostUsrConfigDir/sdk"
 
@@ -550,7 +474,7 @@ fun runList(entrypoint: Entrypoint): Int {
     throw UsageError("`stoic --list` doesn't take positional arguments")
   } else if (entrypoint.isTool) {
     // TODO: deduplicate this list with the one in runTool
-    listOf("shell", "rsync", "init-config", "new-plugin").forEach {
+    listOf("init-config", "new-plugin").forEach {
       println(it)
     }
   } else {
@@ -583,14 +507,14 @@ fun gatherPluginList(entrypoint: Entrypoint): List<String> {
       }
     }
 
-    val usrPrebuilts = File("$stoicHostUsrSyncDir/plugins").listFiles(dexJarFilter)!!
+    val usrPrebuilts = File(stoicDemoPluginsDir).listFiles(dexJarFilter)!!
     usrPrebuilts.forEach {
       pluginList.add("${it.name.removeSuffix(".dex.jar")} (--user)")
     }
   }
 
   if (entrypoint.demoAllowed) {
-    val demoPrebuilts = File("$stoicHostCoreSyncDir/plugins").listFiles(dexJarFilter)!!
+    val demoPrebuilts = File("$stoicReleaseSyncDir/plugins").listFiles(dexJarFilter)!!
     demoPrebuilts.forEach {
       pluginList.add("${it.name.removeSuffix(".dex.jar")} (--demo)")
     }
@@ -706,8 +630,9 @@ fun runPlugin(entrypoint: Entrypoint, dexJarInfo: Pair<File, String>?): Int {
   // force start the server, and then retry
   logInfo { "starting server via slow-path" }
 
-  // TODO: this syncDevice is not usually necessary, and it adds 300-400ms
-  //   it'd be better to pass some hash to stoic-attach and have it do an up-to-date check
+  // syncDevice is usually not necessary - we could optimistically assume its not and have
+  // stoic-attach verify. But it typically takes less than 50ms - that's well under 5% of the time
+  // needed for the slow path - so it's not too bad.
   syncDevice()
 
   val startOption = if (entrypoint.restartApp) {
@@ -771,116 +696,15 @@ fun checkRequiredSdkPackages(vararg required: String) {
   )
 }
 
-// This version of arsync never pushes as root - TODO: allow this as an option
-fun arsync(args: List<String>) {
-  val binDir = "$stoicDeviceSyncDir/bin"
-  val adbRsyncPath = "$binDir/rsync"
-  val devNullInput = Redirect.from(File("/dev/null"))
-  // Fetch the information we need in a single `adb shell`
-  // We intentionally avoid using 1 to represent a value because that often indicates other errors
-  val exitCodeCmd = """
-    uid=$(id -u)
-    [ -e $adbRsyncPath ]
-    exit $(( ( (uid == 0) << 1) | ($? << 2) ))
-  """.trimIndent()
-  logDebug { "exitCodeCmd: '$exitCodeCmd'"}
-  val exitCode = adbProcessBuilder("shell", exitCodeCmd)
-    .inheritIO()
-    .redirectInput(devNullInput)
-    .start().waitFor()
-  val isRoot = (exitCode shr 1) and 1 != 0
-  val missingRsync= ((exitCode) shr 2) and 1 != 0
-
-  // Sanity check the result
-  if ((exitCode and 1) != 0 || (exitCode shr 3) != 0) {
-    logError { "Unexpected exit code: $exitCode" }
-  } else {
-    logDebug { "rsync test exitcode: $exitCode - isRoot=$isRoot, missingRsync=$missingRsync" }
-  }
-
-  if (missingRsync) {
-    if (isRoot) {
-      check(0 == adbProcessBuilder("push", "$stoicReleaseDir/sync/bin/rsync", "/data/local/tmp")
-        .inheritIO()
-        .redirectInput(devNullInput)
-        .start()
-        .waitFor())
-      check(0 == adbProcessBuilder(
-          "shell", """
-            su shell mkdir -p $binDir 
-            mv /data/local/tmp/rsync $binDir
-            chown shell:shell $adbRsyncPath
-          """.trimIndent())
-          .inheritIO()
-        .redirectInput(devNullInput)
-        .start()
-        .waitFor())
-    } else {
-      check(0 == adbProcessBuilder("shell", "mkdir -p $binDir")
-        .inheritIO()
-        .redirectInput(devNullInput)
-        .start()
-        .waitFor())
-      check(0 == adbProcessBuilder("push", "$stoicReleaseDir/sync/bin/rsync", adbRsyncPath)
-        .inheritIO()
-        .redirectInput(devNullInput)
-        .redirectOutput(Redirect.DISCARD)
-        .start()
-        .waitFor())
-    }
-  }
-
-  // Need a special wrapper to avoid pushing as root
-  val wrapper = if (isRoot) {
-    "$stoicHostScriptDir/arsync-unroot-wrapper.sh"
-  } else {
-    "$stoicHostScriptDir/arsync-wrapper.sh"
-  }
-
-  val brewRsync = if (ProcessBuilder("which", "brew").waitFor(null) == 0) {
-    val brewPrefix = ProcessBuilder("brew", "--prefix").stdout()
-    val brewRsync = "$brewPrefix/bin/rsync"
-
-    // Force rsync to use the homebrew version, even if the system version is earlier in the PATH
-    // This is useful because Mac ships an ancient version of rsync
-    if (File(brewRsync).exists()) brewRsync else null
-  } else {
-    null
-  }
-  val rsyncPath = brewRsync ?: ProcessBuilder("which", "rsync").stdout()
-
-  // I observe hangs with large files if I don't pass --blocking-io
-  val arsyncCmd = listOf(rsyncPath, "--blocking-io", "--rsh=sh $wrapper") + args
-  logDebug { "$arsyncCmd" }
-  try {
-    runCommand(arsyncCmd, inheritIO = true, envOverrides = mapOf("ANDROID_SERIAL" to adbSerial))
-  } catch (e: FailedExecException) {
-    logError { "$rsyncPath failed - check: $rsyncPath --version (Stoic needs 3.x.x)" }
-    throw e
-  }
-}
-
 fun syncDevice() {
-  logInfo { "syncing device ..." }
-  val opts = listOf("--archive", "--delete")
-
-  // This won't necessarily exist - need to run `stoic init-config`
-  val maybeUsrSyncDir = if (File(stoicHostUsrSyncDir).exists()) {
-    listOf("$stoicHostUsrSyncDir/")
-  } else {
-    listOf()
+  logBlock(LogLevel.INFO, { "syncing device" }) {
+    check(adbProcessBuilder(
+      "push",
+      "--sync",
+      "$stoicReleaseSyncDir/",
+      "$stoicDeviceSyncDir/"
+    ).start().waitFor() == 0)
   }
-
-  arsync(
-    opts + listOf("$stoicHostCoreSyncDir/") + maybeUsrSyncDir + listOf("adb:$stoicDeviceSyncDir/")
-  )
-
-  // We remove write permissions to stop people from accidentally writing to files that will be
-  // subsequently overwritten by the next sync
-  // For better latency we do this in the background
-  adbProcessBuilder("shell", "chmod -R a-w $stoicDeviceSyncDir/")
-    .start()
-  logInfo { "... done syncing device" }
 }
 
 fun shellEscapeCmd(cmdArgs: List<String>): String {
@@ -934,19 +758,10 @@ fun resolveUserOrDemo(entrypoint: Entrypoint): Pair<File, String>? {
 
       return DexJarCache.resolve(File(jarPath))
     }
-
-    logDebug { "$usrPluginSrcDir does not exist - falling back to prebuilt locations." }
-
-    val usrPluginDexJar = File("$stoicHostUsrSyncDir/plugins/$pluginDexJar")
-    if (usrPluginDexJar.exists()) {
-      return DexJarCache.resolve(usrPluginDexJar)
-    } else if (entrypoint.isUser) {
-      throw PithyException("User plugin `$pluginName` not found, to see list: stoic --list --user")
-    }
   }
 
   if (entrypoint.demoAllowed) {
-    val corePluginDexJar = File("$stoicHostCoreSyncDir/plugins/$pluginDexJar")
+    val corePluginDexJar = File("$stoicDemoPluginsDir/$pluginDexJar")
     if (corePluginDexJar.exists()) {
       return DexJarCache.resolve(corePluginDexJar)
     } else if (entrypoint.isDemo) {
