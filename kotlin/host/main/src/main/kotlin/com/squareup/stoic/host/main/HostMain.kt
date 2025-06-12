@@ -36,9 +36,11 @@ import com.squareup.stoic.common.logInfo
 import com.squareup.stoic.common.minLogLevel
 import com.squareup.stoic.common.runCommand
 import com.squareup.stoic.common.serverSocketName
+import com.squareup.stoic.common.showStatus
 import com.squareup.stoic.common.stdout
 import com.squareup.stoic.common.stoicDeviceSyncDir
 import com.squareup.stoic.common.waitFor
+import com.squareup.stoic.common.withStatus
 import java.io.File
 import java.io.FileFilter
 import java.lang.ProcessBuilder.Redirect
@@ -153,6 +155,10 @@ class Entrypoint : CliktCommand(
     "--info",
     help = "enable info logging"
   ).trackableFlag()
+  val noStatus by option(
+    "--no-status",
+    help = "disable status messages"
+  ).trackableFlag()
 
   val restartApp by option(
     "--restart",
@@ -261,6 +267,7 @@ class Entrypoint : CliktCommand(
     } else {
       LogLevel.WARN
     }
+    showStatus = !noStatus
 
     logDebug { "isGraal=$isGraal" }
 
@@ -623,60 +630,62 @@ fun runPlugin(entrypoint: Entrypoint, dexJarInfo: Pair<File, String>?): Int {
     }
   }
 
-  // force start the server, and then retry
-  logInfo { "starting server via slow-path" }
+  withStatus("Attaching...") {
+    // force start the server, and then retry
+    logInfo { "starting server via slow-path" }
 
-  // syncDevice is usually not necessary - we could optimistically assume its not and have
-  // stoic-attach verify. But it typically takes less than 50ms - that's well under 5% of the time
-  // needed for the slow path - so it's not too bad.
-  syncDevice()
+    // syncDevice is usually not necessary - we could optimistically assume its not and have
+    // stoic-attach verify. But it typically takes less than 50ms - that's well under 5% of the time
+    // needed for the slow path - so it's not too bad.
+    syncDevice()
 
-  val startOption = if (entrypoint.restartApp) {
-    "restart"
-  } else if (entrypoint.noStartIfNeeded) {
-    "do_not_start"
-  } else {
-    "start_if_needed"
-  }
+    val startOption = if (entrypoint.restartApp) {
+      "restart"
+    } else if (entrypoint.noStartIfNeeded) {
+      "do_not_start"
+    } else {
+      "start_if_needed"
+    }
 
-  val debugOption = if (minLogLevel <= LogLevel.DEBUG) {
-    "debug_true"
-  } else {
-    "debug_false"
-  }
+    val debugOption = if (minLogLevel <= LogLevel.DEBUG) {
+      "debug_true"
+    } else {
+      "debug_false"
+    }
 
-  val proc = adbProcessBuilder(
-    "shell",
-    shellEscapeCmd(
-      listOf(
-        "$stoicDeviceSyncDir/bin/stoic-attach",
-        "$STOIC_PROTOCOL_VERSION",
-        entrypoint.pkg,
-        startOption,
-        debugOption
+    val proc = adbProcessBuilder(
+      "shell",
+      shellEscapeCmd(
+        listOf(
+          "$stoicDeviceSyncDir/bin/stoic-attach",
+          "$STOIC_PROTOCOL_VERSION",
+          entrypoint.pkg,
+          startOption,
+          debugOption
+        )
       )
     )
-  )
-    .redirectInput(File("/dev/null"))
-    .redirectOutput(Redirect.PIPE)
-    .redirectErrorStream(true)
-    .start()
+      .redirectInput(File("/dev/null"))
+      .redirectOutput(Redirect.PIPE)
+      .redirectErrorStream(true)
+      .start()
 
-  if (minLogLevel <= LogLevel.DEBUG) {
-    proc.inputReader().use { inputReader ->
-      thread {
-        inputReader.lineSequence().forEach {
-          logDebug { it }
-        }
-        if (proc.waitFor() != 0) {
-          logError { "stoic-attach failed - see output above" }
-        }
-      }.join()
-    }
-  } else {
-    if (proc.waitFor() != 0) {
-      val stoicAttachOutput = proc.inputReader().readText()
-      logError { "stoic-attach failed\n$stoicAttachOutput" }
+    if (minLogLevel <= LogLevel.DEBUG) {
+      proc.inputReader().use { inputReader ->
+        thread {
+          inputReader.lineSequence().forEach {
+            logDebug { it }
+          }
+          if (proc.waitFor() != 0) {
+            logError { "stoic-attach failed - see output above" }
+          }
+        }.join()
+      }
+    } else {
+      if (proc.waitFor() != 0) {
+        val stoicAttachOutput = proc.inputReader().readText()
+        logError { "stoic-attach failed\n$stoicAttachOutput" }
+      }
     }
   }
 
@@ -736,24 +745,26 @@ fun resolveUserOrDemo(entrypoint: Entrypoint): Pair<File, String>? {
   if (entrypoint.userAllowed) {
     val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginName"
     if (File(usrPluginSrcDir).exists()) {
-      val jarPath = logBlock(LogLevel.INFO, { "building $usrPluginSrcDir" }) {
-        logInfo { "building plugin" }
-        val prefix = "STOIC_BUILD_PLUGIN_JAR_OUT="
-        try {
-          ProcessBuilder("./build-plugin")
-            .inheritIO()
-            .directory(File(usrPluginSrcDir))
-            .stdout()
-            .lineSequence()
-            .first { it.startsWith(prefix) }
-            .removePrefix(prefix)
-        } catch (e: NoSuchElementException) {
-          logDebug { e.stackTraceToString() }
-          throw PithyException("build-plugin must output line: $prefix<path-to-output-jar>")
+      withStatus("Compiling...") {
+        val jarPath = logBlock(LogLevel.INFO, { "building $usrPluginSrcDir" }) {
+          logInfo { "building plugin" }
+          val prefix = "STOIC_BUILD_PLUGIN_JAR_OUT="
+          try {
+            ProcessBuilder("./build-plugin")
+              .inheritIO()
+              .directory(File(usrPluginSrcDir))
+              .stdout()
+              .lineSequence()
+              .first { it.startsWith(prefix) }
+              .removePrefix(prefix)
+          } catch (e: NoSuchElementException) {
+            logDebug { e.stackTraceToString() }
+            throw PithyException("build-plugin must output line: $prefix<path-to-output-jar>")
+          }
         }
-      }
 
-      return DexJarCache.resolve(File(jarPath))
+        return DexJarCache.resolve(File(jarPath))
+      }
     }
   }
 

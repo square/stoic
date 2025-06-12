@@ -3,6 +3,10 @@ package com.squareup.stoic.common
 import java.io.File
 import java.lang.ProcessBuilder.Redirect
 
+private const val MAX_STATUS_LENGTH = 80
+private val CLEAR_STATUS = " ".repeat(MAX_STATUS_LENGTH) + "\r"
+var showStatus: Boolean = true
+var statusShowing: Boolean = false
 var minLogLevel: LogLevel = LogLevel.DEBUG
 
 enum class LogLevel(val level: Int) {
@@ -24,7 +28,41 @@ enum class LogLevel(val level: Int) {
 
 fun log(level: LogLevel, msg: () -> String) {
   if (level >= minLogLevel) {
-    System.err.println(msg())
+    var realizedMsg = msg()
+    if (statusShowing) {
+      // We need to clear the status first
+      realizedMsg = CLEAR_STATUS + realizedMsg
+      statusShowing = false
+    }
+    System.err.println(realizedMsg)
+  }
+}
+
+fun status(msg: String) {
+  if (showStatus) {
+    var msgToDisplay = msg.take(MAX_STATUS_LENGTH) + "\r"
+    if (statusShowing) {
+      msgToDisplay = CLEAR_STATUS + msgToDisplay
+    }
+
+    System.err.print(msgToDisplay)
+    statusShowing = true
+  }
+}
+
+fun clearStatus() {
+  if (statusShowing) {
+    System.err.print(CLEAR_STATUS)
+    statusShowing = false
+  }
+}
+
+inline fun <T> withStatus(msg: String, block: () -> T): T {
+  status(msg)
+  return try {
+    block()
+  } finally {
+    clearStatus()
   }
 }
 

@@ -56,11 +56,11 @@ verify_output 'Hello world []'                                                  
 adb uninstall com.squareup.stoic.demoapp.withoutsdk
 
 # Verify no stderr logs when reinstalling the demo app
-verify_stderr '' $LINENO stoic helloworld
+verify_stderr '' $LINENO stoic --no-status helloworld
 
 # Verify no stderr logs when starting a previously stopped demo app
 adb shell am force-stop com.squareup.stoic.demoapp.withoutsdk
-verify_stderr '' $LINENO stoic helloworld
+verify_stderr '' $LINENO stoic --no-status helloworld
 
 # Verify no stderr logs when restarting the demo app
-verify_stderr '' $LINENO stoic --restart helloworld
+verify_stderr '' $LINENO stoic --no-status --restart helloworld
