@@ -99,7 +99,7 @@ fi
 if ! pkg_dir="$(run_as_compat "$pkg" printenv HOME)"; then
   if [ "$pkg" = "com.squareup.stoic.demoapp.withoutsdk" ]; then
     # Install and retry
-    pm install "$stoic_device_sync_dir/apk/demo-app-without-sdk-debug.apk"
+    pm install "$stoic_device_sync_dir/apk/stoic-demo-app-without-sdk-debug.apk"
     pkg_dir="$(run_as_compat "$pkg" printenv HOME)"
   else
     >&2 echo "$pkg not found"
@@ -108,8 +108,8 @@ if ! pkg_dir="$(run_as_compat "$pkg" printenv HOME)"; then
 fi
 
 pkg_stoic_dir="$pkg_dir/stoic"
-pkg_so="$pkg_stoic_dir/stoic.so"
-pkg_server_dex_jar="$pkg_stoic_dir/android-server-attached.dex.jar"
+pkg_so="$pkg_stoic_dir/stoic-jvmti-agent.so"
+pkg_server_dex_jar="$pkg_stoic_dir/stoic-server-attached.dex.jar"
 pkg_options_json="$pkg_stoic_dir/options.json"
 
 # TODO: Use a lock to ensure that multiple processes aren't attempting to bring
@@ -118,8 +118,8 @@ pkg_options_json="$pkg_stoic_dir/options.json"
 >&2 echo "cleaning $pkg_stoic_dir"
 run_as_compat "$pkg" rm -rf "$pkg_stoic_dir"
 run_as_compat "$pkg" mkdir "$pkg_stoic_dir"
-cross_uid_cp 444 "$stoic_device_sync_dir/stoic/stoic.so" "$pkg_so"
-cross_uid_cp 444 "$stoic_device_sync_dir/stoic/android-server-attached.dex.jar" "$pkg_server_dex_jar"
+cross_uid_cp 444 "$stoic_device_sync_dir/stoic/stoic-jvmti-agent.so" "$pkg_so"
+cross_uid_cp 444 "$stoic_device_sync_dir/stoic/stoic-server-attached.dex.jar" "$pkg_server_dex_jar"
 echo "{\"stoicVersion\":$stoic_protocol_version}" | cross_uid_cp 444 - "$pkg_options_json"
 
 run_as_compat "$pkg" mkfifo "$pkg_stoic_dir/server-up.fifo"
@@ -134,8 +134,8 @@ first_pid="$(pidof "$pkg" || true)"
 resolve_package_pid "$pkg"
 
 if [ "$pkg_pid" = "$first_pid" ]; then
-  # Since pkg was already running, double-check /proc/pid/maps for stoic.so
-  if run_as_compat "$pkg" cat /proc/$pkg_pid/maps | grep "stoic.so"; then
+  # Since pkg was already running, double-check /proc/pid/maps for stoic-jvmti-agent.so
+  if run_as_compat "$pkg" cat /proc/$pkg_pid/maps | grep "stoic-jvmti-agent.so"; then
     >&2 echo "stoic already loaded - need to restart the process first"
     >&2 echo "consider:"
     >&2 echo "  stoic --restart ..."

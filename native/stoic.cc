@@ -801,7 +801,7 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
   // Setup args that we need for our ClassLoader
   //
 
-  std::string stoicDexJarChars = std::string(stoicDir.c_str()) + std::string("/android-server-attached.dex.jar");
+  std::string stoicDexJarChars = std::string(stoicDir.c_str()) + std::string("/stoic-server-attached.dex.jar");
   LOG(DEBUG) << "Found stoicDexJarChars: " << stoicDexJarChars.c_str();
 
   std::string dexOutputDirChars = std::string(stoicDir.c_str()) + std::string("/dexout");
@@ -815,7 +815,7 @@ static void AgentMain(jvmtiEnv* jvmti, JNIEnv* jni, [[maybe_unused]] void* arg) 
 
 
   //
-  // Construct a new ClassLoader for android-server-attached.dex.jar
+  // Construct a new ClassLoader for stoic-server-attached.dex.jar
   //
 
   ScopedLocalRef<jclass> klass_DexClassLoader(jni, jni->FindClass("dalvik/system/DexClassLoader"));
