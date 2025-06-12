@@ -4,16 +4,17 @@ import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
 import android.util.Log
-import com.squareup.stoic.StoicJvmti
 import com.squareup.stoic.common.JvmtiAttachOptions
 import com.squareup.stoic.common.LogLevel
 import com.squareup.stoic.common.STOIC_PROTOCOL_VERSION
 import com.squareup.stoic.common.minLogLevel
 import com.squareup.stoic.common.optionsJsonFromStoicDir
 import com.squareup.stoic.common.serverSocketName
-import com.squareup.stoic.common.waitSocketName
+import com.squareup.stoic.common.waitFifo
+import com.squareup.stoic.threadlocals.stoic
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.IOException
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -46,21 +47,14 @@ private fun startServer(stoicDir: String) {
     Log.d("stoic", "localSocketAddress: ($name, $namespace)")
 
     thread(name = "stoic-server") {
-      Log.d("stoic", "Letting the client know that we're up by connecting to the wait socket")
+      val fifo = waitFifo(File(stoicDir))
+      Log.d("stoic", "Letting the client know that we're up by writing to the $fifo")
       try {
-        LocalSocket().also {
-          it.connect(LocalSocketAddress(waitSocketName(pkg)))
-          Log.d("stoic", "connected, writing")
-          val writer = it.outputStream.bufferedWriter(UTF_8)
-          writer.write("Server up\n")
-          Log.d("stoic", "wrote, flushing")
-          writer.flush()
-          Log.d("stoic", "flushing, closing the socket")
-          it.close()
-          Log.d("stoic", "Socket closed. Ending the wait thread (this is good!)")
-        }
-      } catch (e: Throwable) {
-        Log.d("stoic", "Failed to connect", e)
+        // It doesn't actually matter what we write - we just need to open it for writing
+        fifo.outputStream().close()
+        Log.d("stoic", "wrote to $fifo")
+      } catch (e: IOException) {
+        Log.e("stoic", "Failed to write to $fifo", e)
         throw e
       }
     }

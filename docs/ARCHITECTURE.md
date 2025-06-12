@@ -104,14 +104,11 @@ injection, Stoic makes careful use of `run-as` to allow it to work on
 non-rooted devices.
 
 Android will not allow the shell user to directly connect to a Unix Domain
-Socket owned by a package (or vice versa), so instead Stoic connects with:
-```
-run-as com.example socat - ABSTRACT-CONNECT://...
-```
+Socket owned by a package (or vice versa), but you can still use `adb forward`
+to forward a port to the unix domain socket. This works without any `run-as`
+tricks. This way we can connect directly to the server without going through
+`adb shell`.
 
-When connecting from your laptop, stoic uses a fast-path - forwarding a port to
-the unix domain socket. This works without any `run-as` tricks. This way we can
-connect directly to the server without going through `adb shell`.
 ```
 adb forward tcp:0 localabstract:/stoic/...
 ```

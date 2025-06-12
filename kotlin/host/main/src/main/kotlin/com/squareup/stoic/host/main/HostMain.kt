@@ -33,23 +33,19 @@ import com.squareup.stoic.common.logBlock
 import com.squareup.stoic.common.logDebug
 import com.squareup.stoic.common.logError
 import com.squareup.stoic.common.logInfo
-import com.squareup.stoic.common.logWarn
 import com.squareup.stoic.common.minLogLevel
 import com.squareup.stoic.common.runCommand
 import com.squareup.stoic.common.serverSocketName
 import com.squareup.stoic.common.stdout
 import com.squareup.stoic.common.stoicDeviceSyncDir
 import com.squareup.stoic.common.waitFor
-import com.squareup.stoic.common.waitSocketName
 import java.io.File
 import java.io.FileFilter
-
 import java.lang.ProcessBuilder.Redirect
 import java.net.Socket
 import java.nio.file.Paths
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
-
 
 var isGraal: Boolean = false
 
@@ -656,7 +652,6 @@ fun runPlugin(entrypoint: Entrypoint, dexJarInfo: Pair<File, String>?): Int {
         "$stoicDeviceSyncDir/bin/stoic-attach",
         "$STOIC_PROTOCOL_VERSION",
         entrypoint.pkg,
-        waitSocketName(entrypoint.pkg),
         startOption,
         debugOption
       )
@@ -698,11 +693,13 @@ fun checkRequiredSdkPackages(vararg required: String) {
 
 fun syncDevice() {
   logBlock(LogLevel.INFO, { "syncing device" }) {
+    // The /. prevents creating an additional level of nesting when the destination directory
+    // already exists.
     check(adbProcessBuilder(
       "push",
       "--sync",
-      "$stoicReleaseSyncDir/",
-      "$stoicDeviceSyncDir/"
+      "$stoicReleaseSyncDir/.",
+      stoicDeviceSyncDir,
     ).start().waitFor() == 0)
   }
 }

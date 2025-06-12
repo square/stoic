@@ -76,7 +76,7 @@ for (bitmap in jvmti.instances(Bitmap::class.java)) {
 
 The primary technologies powering Stoic are
 [JVMTI](https://en.wikipedia.org/wiki/Java_Virtual_Machine_Tools_Interface),
-Unix Domain Sockets, `socat`, and `run-as`.
+Unix Domain Sockets, and `run-as`.
 
 The first time you run Stoic on a process it will attach a jvmti agent which
 will start a server inside the process. We connect to this server through a
