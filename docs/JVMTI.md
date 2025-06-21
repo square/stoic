@@ -43,6 +43,7 @@ https://cs.android.com/android/platform/superproject/main/+/main:out/soong/.inte
 ### e.g. How JDI implements BreakpointRequest.addInstanceFilter
 https://docs.oracle.com/javase/8/docs/jdk/api/jpda/jdi/com/sun/jdi/request/BreakpointRequest.html#addInstanceFilter-com.sun.jdi.ObjectReference-
 https://cs.android.com/android/platform/superproject/main/+/main:external/oj-libjdwp/src/share/classes/com/sun/tools/jdi/EventRequestManagerImpl.java;l=304
+
 ### How JDWP implements it
 https://cs.android.com/android/platform/superproject/main/+/main:external/oj-libjdwp/src/share/back/eventFilter.c;l=465
 (eventFilterRestricted_passesFilter is called from event_callback which in turn is called by
