@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+
+script_dir="$(dirname "$(realpath "$0")")"
+final_dir_name="$(basename "$script_dir")"
+cd "$script_dir"
+
+
+./gradlew --quiet :assembleRelease
+echo "STOIC_BUILD_PLUGIN_OUT=$PWD/build/outputs/apk/release/$final_dir_name-release-unsigned.apk"

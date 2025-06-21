@@ -3,6 +3,7 @@
 package com.squareup.stoic.host.main
 
 import com.squareup.stoic.common.LogLevel
+import com.squareup.stoic.common.PithyException
 import com.squareup.stoic.common.Sha
 import com.squareup.stoic.common.logBlock
 import com.squareup.stoic.common.logInfo
@@ -11,11 +12,11 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import java.io.File
 import java.nio.file.*
 import java.nio.file.attribute.FileTime
-import java.security.MessageDigest
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToStream
 import java.io.FileOutputStream
+import java.util.zip.ZipFile
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
@@ -33,26 +34,52 @@ object DexJarCache {
     Files.createDirectories(cacheRoot)
   }
 
-  fun resolve(jarFile: File): Pair<File, String> {
-    val keyDir = computeKeyDir(jarFile)
-    get(keyDir, jarFile)?.let { return it }
+  fun resolve(jarOrApkFile: File): Pair<File, String> {
+    val keyDir = computeKeyDir(jarOrApkFile)
+    get(keyDir, jarOrApkFile)?.let { return it }
     logInfo { "DexJarCache.get failed - regenerating sha/dex" }
 
-    val dexJar = jarFileToDexJarFile(keyDir, jarFile)
+    val dexJar = computeCachedDexJarPath(keyDir, jarOrApkFile)
     Files.createDirectories(keyDir)
     val metaFile = keyDir.resolve("meta")
     metaFile.deleteIfExists()
 
-    if (dexJar.toFile().canonicalPath != jarFile.canonicalPath) {
-      // The input jarFile is not a .dex.jar
-      dexJar.deleteIfExists()
-      val tmpDir = createTempDirectory("stoic-plugin-").toFile()
-      logBlock(LogLevel.INFO, { "dexing $jarFile" }) {
-        d8PreserveManifest(jarFile, dexJar.toFile(), tmpDir)
+    if (jarOrApkFile.extension == "apk") {
+      val apkFile = jarOrApkFile
+      logBlock(LogLevel.INFO, { "extracting classes.dex from $jarOrApkFile" }) {
+        // TODO: This doesn't support multidex
+        ZipFile(apkFile).use { zip ->
+          val entry = zip.entries().asSequence().find { it.name.endsWith("classes.dex") }
+          val entry2 = zip.entries().asSequence().find { it.name.endsWith("classes2.dex") }
+          if (entry2 != null) {
+            throw PithyException("Stoic does not yet support multidex - please file an issue")
+          }
+
+          if (entry != null) {
+            zip.getInputStream(entry).use { input ->
+              FileOutputStream(dexJar.toFile()).use { output ->
+                input.copyTo(output)
+              }
+            }
+          } else {
+            throw PithyException("No classes.jar found in ${apkFile.name}")
+          }
+        }
+      }
+    } else {
+      val jarFile = jarOrApkFile
+      if (dexJar.toFile().canonicalPath != jarFile.canonicalPath) {
+        // The input jarFile is not a .dex.jar
+        dexJar.deleteIfExists()
+        val tmpDir = createTempDirectory("stoic-plugin-").toFile()
+        // TODO: show a status line here - this can take a few seconds if the jar is big
+        logBlock(LogLevel.INFO, { "dexing $jarFile" }) {
+          d8PreserveManifest(jarFile, dexJar.toFile(), tmpDir)
+        }
       }
     }
 
-    val dexJarSha256Sum = updateMeta(keyDir, jarFile)
+    val dexJarSha256Sum = updateMeta(keyDir, jarOrApkFile)
     return Pair(dexJar.toFile(), dexJarSha256Sum)
   }
 
@@ -67,7 +94,7 @@ object DexJarCache {
     }
 
     val meta = Json.decodeFromString<DexJarCacheMeta>(metaFile.readText())
-    val dexJar = jarFileToDexJarFile(keyDir, jarFile)
+    val dexJar = computeCachedDexJarPath(keyDir, jarFile)
     val currentCTime = retrieveCTime(Paths.get(meta.canonicalPath))
     if (currentCTime == meta.posixCTime) {
       return Pair(dexJar.toFile(), meta.dexJarSha256Sum)
@@ -76,7 +103,7 @@ object DexJarCache {
     }
   }
 
-  private fun jarFileToDexJarFile(keyDir: Path, jarFile: File): Path {
+  private fun computeCachedDexJarPath(keyDir: Path, jarFile: File): Path {
     val canonicalPath = jarFile.canonicalPath
     val canonicalFile = File(canonicalPath)
     if (canonicalFile.name.endsWith(".dex.jar")) {
@@ -87,7 +114,7 @@ object DexJarCache {
   }
 
   private fun updateMeta(keyDir: Path, jarFile: File): String {
-    val dexJar = jarFileToDexJarFile(keyDir, jarFile)
+    val dexJar = computeCachedDexJarPath(keyDir, jarFile)
     check(dexJar.exists())
 
     val canonicalPath = jarFile.canonicalPath

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stoic builds plugins as APKs, but only the classes.dex file within is used.
+  Any manifest changes will be ignored.
+-->
+<manifest 
+    xmlns:android="http://schemas.android.com/apk/res/android">
+</manifest>

@@ -92,6 +92,10 @@ class Stoic(
   val stdout: PrintStream,
   val stderr: PrintStream,
 ) {
+  companion object {
+    const val DEFAULT_TIMEOUT_MS = 60_000L
+  }
+
   val jvmti: StoicJvmti
     get() = StoicJvmti.get()
 
@@ -154,7 +158,7 @@ class Stoic(
    * using wrapRunnable (for non-blocking behavior) or LatchedRunnable (for blocking)
    */
 
-  fun runOnLooper(looper: Looper, timeoutMs: Long? = null, runnable: Runnable) {
+  fun runOnLooper(looper: Looper, timeoutMs: Long? = DEFAULT_TIMEOUT_MS, runnable: Runnable) {
     if (timeoutMs != null) {
       val latchedRunnable = LatchedRunnable(this, runnable)
       Handler(looper).post(latchedRunnable)
@@ -164,7 +168,11 @@ class Stoic(
     }
   }
 
-  fun runOnExecutor(executor: Executor, timeoutMs: Long? = null, runnable: Runnable) {
+  fun runOnMain(timeoutMs: Long? = DEFAULT_TIMEOUT_MS, runnable: Runnable) {
+    runOnLooper(Looper.getMainLooper(), timeoutMs, runnable)
+  }
+
+  fun runOnExecutor(executor: Executor, timeoutMs: Long? = DEFAULT_TIMEOUT_MS, runnable: Runnable) {
     if (timeoutMs != null) {
       val latchedRunnable = LatchedRunnable(this, runnable)
       executor.execute(latchedRunnable)
@@ -174,7 +182,7 @@ class Stoic(
     }
   }
 
-  fun thread(timeoutMs: Long? = null, runnable: Runnable): Thread {
+  fun thread(timeoutMs: Long? = DEFAULT_TIMEOUT_MS, runnable: Runnable): Thread {
     if (timeoutMs != null) {
       val latchedRunnable = LatchedRunnable(this, runnable)
       val t = rawStoicThread(latchedRunnable)

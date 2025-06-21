@@ -16,6 +16,7 @@ fun eprint(x: Any?) = stoic.stderr.print(x)
  * Exit the plugin with the given exit code.
  */
 fun exit(code: Int) = stoic.exitPlugin(code)
+fun exitPlugin(code: Int) = stoic.exitPlugin(code)
 fun exitProcess(code: Int) = stoic.exitPlugin(code)
 
 /**

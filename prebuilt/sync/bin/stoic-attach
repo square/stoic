@@ -60,11 +60,14 @@ cross_uid_cp() {
 wait_for_server_up_pid=""
 logcat_pid=""
 cleanup() {
-  if [ -n "$wait_for_server_up_pid" ]; then
-    kill "$wait_for_server_up_pid"
+  if [ -n "${wait_for_server_up_pid:-}" ]; then
+    # Killing the server_up_pid doesn't actually unblock anything - we'd need
+    # to kill the pid inside that's actually opening the fio. Instead, we just
+    # write to the fifo to cause it to exit
+    run_as_compat "$pkg" timeout 1s sh -c ": > $pkg_stoic_dir/server-up.fifo"
   fi
-  if [ -n "$logcat_pid" ]; then
-    kill "$logcat_pid"
+  if [ -n "${logcat_pid:-}" ]; then
+    kill "$logcat_pid" || true
   fi
 }
 trap cleanup EXIT
@@ -146,7 +149,16 @@ fi
 # TODO: output to temporary file
 logcat -T 1 --pid "$pkg_pid" "stoic:v *:w" >&2 &
 logcat_pid=$!
-am attach-agent "$pkg" "$pkg_so=$pkg_stoic_dir"
+
+# Sometimes attach-agent complains that the process doesn't exist - maybe
+# because it was created to recently? Sleeping fixes it.
+am attach-agent "$pkg" "$pkg_so=$pkg_stoic_dir" || attach_agent_exit_code=$?
+if [ "${attach_agent_exit_code:-0}" -ne 0 ]; then
+  >&2 echo "attach-agent exited with code=$attach_agent_exit_code"
+  >&2 echo "Attach agent failed... sleeping 1 second and retrying..."
+  sleep 1
+  am attach-agent "$pkg" "$pkg_so=$pkg_stoic_dir"
+fi
 
 >&2 echo "Waiting for wait_for_server_up to finish..."
 wait_for_server_up_exit_status=0

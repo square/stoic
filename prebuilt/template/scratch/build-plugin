@@ -1,7 +1,0 @@
-#!/bin/bash
-set -euo pipefail
-
-cd "$(dirname "$(realpath "$0")")"
-
-./gradlew --quiet :shadowJar
-echo STOIC_BUILD_PLUGIN_JAR_OUT=$PWD/build/libs/scratch-all.jar

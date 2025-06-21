@@ -382,6 +382,7 @@ class NewPluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic 
     val usrPluginSrcDir = newPlugin(pluginName)
 
     System.err.println("New plugin src written to $usrPluginSrcDir")
+    System.err.println("Run it with: stoic $pluginName")
   }
 }
 
@@ -395,34 +396,25 @@ fun newPlugin(pluginName: String, ignoreExisting: Boolean = false): File {
   File(stoicHostUsrPluginSrcDir).mkdirs()
 
   val usrPluginSrcDir = File("$stoicHostUsrPluginSrcDir/$pluginName")
-  val scratchSrcDir = File("$stoicReleaseDir/template/scratch")
+  val pluginTemplateSrcDir = File("$stoicReleaseDir/template/plugin-template")
 
-  if (usrPluginSrcDir.exists() && ignoreExisting) {
-    return usrPluginSrcDir
+  if (usrPluginSrcDir.exists()) {
+    if (ignoreExisting) {
+      return usrPluginSrcDir
+    } else {
+      throw PithyException("$usrPluginSrcDir already exists")
+    }
   }
 
   // Copy the scratch template plugin
   ProcessBuilder(
     "cp",
     "-iR",
-    scratchSrcDir.absolutePath,
+    pluginTemplateSrcDir.absolutePath,
     usrPluginSrcDir.absolutePath
-  ).inheritIO().waitFor(0)
+  ).inheritIO().redirectInput(File("/dev/null")).waitFor(0)
 
   File(usrPluginSrcDir, ".stoic_template_version").writeText(StoicProperties.STOIC_VERSION_NAME)
-
-  // Replace "scratch" with the name of the plugin
-  check(ProcessBuilder.startPipeline(
-    listOf(
-      ProcessBuilder("grep", "--recursive", "--files-with-matches", "--null", "scratch", ".")
-        .directory(usrPluginSrcDir)
-        .redirectError(Redirect.INHERIT),
-      ProcessBuilder("xargs", "-0", "sed", "-i", "", "s/scratch/$pluginName/g")
-        .directory(usrPluginSrcDir)
-        .inheritIO()
-        .redirectInput(Redirect.PIPE)
-    )
-  ).all { it.waitFor() == 0 })
 
   return usrPluginSrcDir
 }
@@ -746,11 +738,11 @@ fun resolveUserOrDemo(entrypoint: Entrypoint): Pair<File, String>? {
     val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginName"
     if (File(usrPluginSrcDir).exists()) {
       withStatus("Compiling...") {
-        val jarPath = logBlock(LogLevel.INFO, { "building $usrPluginSrcDir" }) {
+        val outputPath = logBlock(LogLevel.INFO, { "building $usrPluginSrcDir" }) {
           logInfo { "building plugin" }
-          val prefix = "STOIC_BUILD_PLUGIN_JAR_OUT="
+          val prefix = "STOIC_BUILD_PLUGIN_OUT="
           try {
-            ProcessBuilder("./build-plugin")
+            ProcessBuilder("./stoic-build-plugin")
               .inheritIO()
               .directory(File(usrPluginSrcDir))
               .stdout()
@@ -759,11 +751,11 @@ fun resolveUserOrDemo(entrypoint: Entrypoint): Pair<File, String>? {
               .removePrefix(prefix)
           } catch (e: NoSuchElementException) {
             logDebug { e.stackTraceToString() }
-            throw PithyException("build-plugin must output line: $prefix<path-to-output-jar>")
+            throw PithyException("stoic-build-plugin must output line: $prefix<path-to-output-jar-or-apk>")
           }
         }
 
-        return DexJarCache.resolve(File(jarPath))
+        return DexJarCache.resolve(File(outputPath))
       }
     }
   }
