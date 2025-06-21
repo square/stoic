@@ -186,6 +186,8 @@ class Entrypoint : CliktCommand(
     help = "Specify the package of the process to connect to"
   ).trackableOption().default(DEFAULT_PACKAGE)
 
+  // TODO: support --pid/-p to allow attaching by pid
+
   val env by option(
     "--env",
     help = "Environment key=value pairs - plugins access these via stoic.getenv(...)"
