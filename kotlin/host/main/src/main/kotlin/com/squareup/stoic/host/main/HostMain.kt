@@ -524,15 +524,10 @@ fun gatherPluginList(entrypoint: Entrypoint): List<String> {
         pluginList.add("${it.name} (--user)")
       }
     }
-
-    val usrPrebuilts = File(stoicDemoPluginsDir).listFiles(dexJarFilter)!!
-    usrPrebuilts.forEach {
-      pluginList.add("${it.name.removeSuffix(".dex.jar")} (--user)")
-    }
   }
 
   if (entrypoint.demoAllowed) {
-    val demoPrebuilts = File("$stoicReleaseSyncDir/plugins").listFiles(dexJarFilter)!!
+    val demoPrebuilts = File(stoicDemoPluginsDir).listFiles(dexJarFilter)!!
     demoPrebuilts.forEach {
       pluginList.add("${it.name.removeSuffix(".dex.jar")} (--demo)")
     }
