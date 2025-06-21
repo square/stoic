@@ -76,7 +76,11 @@ for (bitmap in jvmti.instances(Bitmap::class.java)) {
 
 The primary technologies powering Stoic are
 [JVMTI](https://en.wikipedia.org/wiki/Java_Virtual_Machine_Tools_Interface),
-Unix Domain Sockets, and `run-as`.
+[Unix Domain Sockets](https://en.wikipedia.org/wiki/Unix_domain_socket), and
+[run-as](https://cs.android.com/android/platform/superproject/main/+/main:system/core/run-as/run-as.cpp).
+Stoic is written in Kotlin and uses
+[Clikt](https://ajalt.github.io/clikt/) for command-line parsing and
+[GraalVM](https://www.graalvm.org/) for snappy start-ups.
 
 The first time you run Stoic on a process it will attach a jvmti agent which
 will start a server inside the process. We connect to this server through a
