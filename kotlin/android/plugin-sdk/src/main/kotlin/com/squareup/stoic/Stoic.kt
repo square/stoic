@@ -168,7 +168,7 @@ class Stoic(
     }
   }
 
-  fun runOnMain(timeoutMs: Long? = DEFAULT_TIMEOUT_MS, runnable: Runnable) {
+  fun runOnMainLooper(timeoutMs: Long? = DEFAULT_TIMEOUT_MS, runnable: Runnable) {
     runOnLooper(Looper.getMainLooper(), timeoutMs, runnable)
   }
 

@@ -182,7 +182,7 @@ class Entrypoint : CliktCommand(
   val pkg by option(
     "--package",
     "--pkg",
-    "-p",
+    "-n",
     help = "Specify the package of the process to connect to"
   ).trackableOption().default(DEFAULT_PACKAGE)
 
@@ -374,14 +374,24 @@ class PluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic plu
         editor
       } else {
         throw PithyException("""
-          Please export STOIC_EDITOR or EDITOR (e.g. `export STOIC_EDITOR=vim`)
-          Or, you can edit $usrPluginSrcDir directly.
+          Editor not found. Please export STOIC_EDITOR or EDITOR.
+          For Android Studio:
+            export STOIC_EDITOR='open -a "Android Studio"'
+          Or, you can open your editor to $usrPluginSrcDir manually.
         """.trimIndent())
+      }
+
+      val editorParts = if (resolvedEditor.contains(" ")) {
+        ProcessBuilder("bash", "-c", "for x in $resolvedEditor; do printf '%s\\n' \"\$x\"; done")
+          .stdout()
+          .split('\n')
+      } else {
+        listOf(resolvedEditor)
       }
 
       val srcMain = "$usrPluginSrcDir/src/main/kotlin/Main.kt"
       val srcGradle = "$usrPluginSrcDir/build.gradle.kts"
-      ProcessBuilder(resolvedEditor, srcMain, srcGradle)
+      ProcessBuilder(editorParts + listOf(srcMain, srcGradle))
         .inheritIO()
         .waitFor(0)
     }

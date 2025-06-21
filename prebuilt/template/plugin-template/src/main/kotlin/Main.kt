@@ -17,15 +17,15 @@ fun main(args: Array<String>) {
   // You may access the arguments passed on the command-line
   println("main(${args.toList()})")
 
-  // Stoic plugins do not run on the main thread initially.
+  // Stoic plugins run on their own background thread initially.
   println("Plugin running in process PID=${myPid()} on thread TID=${myTid()}")
 
-  // Use runOnMain to run code in the main thread. This will block the plugin
-  // thread until it returns, and take care of updating thread-locals such that
-  // println will tunnel through to the correct Stoic instance.
-  // (use runOnLooper/runOnThread for running code in other threads)
-  stoic.runOnMain {
-    println("Now plugin running in process PID=${myPid()} on thread TID=${myTid()}")
+  // Use runOnMainLooper to run code on the main thread. This will block the
+  // plugin thread until it returns, and take care of updating thread-locals
+  // such that println will tunnel through to the correct Stoic instance.
+  // (use runOnLooper/runOnExecutor/runOnThread for running on other threads)
+  runOnMainLooper {
+    println("Plugin running on main thread (PID=${myPid()}, TID=${myTid()})")
   }
 
   // If you wish to exit with an error-code other than zero, you can call

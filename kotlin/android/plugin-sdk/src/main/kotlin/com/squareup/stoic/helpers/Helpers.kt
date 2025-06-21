@@ -5,7 +5,9 @@
  */
 package com.squareup.stoic.helpers
 
+import android.os.Looper
 import com.squareup.stoic.threadlocals.stoic
+import java.util.concurrent.Executor
 
 fun println(x: Any?) = stoic.stdout.println(x)
 fun print(x: Any?) = stoic.stdout.print(x)
@@ -24,4 +26,13 @@ fun exitProcess(code: Int) = stoic.exitPlugin(code)
  * stoic thread-local with that thread so any code run on it will be connected to the current
  * plugin
  */
-fun thread(timeoutMs: Long? = null, runnable: Runnable) = stoic.thread(timeoutMs, runnable)
+fun thread(runnable: Runnable) = stoic.thread(runnable = runnable)
+fun runOnMainLooper(runnable: Runnable) = stoic.runOnMainLooper(runnable = runnable)
+fun runOnLooper(looper: Looper, runnable: Runnable) = stoic.runOnLooper(
+  looper = looper,
+  runnable = runnable
+)
+fun runOnExecutor(executor: Executor, runnable: Runnable) = stoic.runOnExecutor(
+  executor = executor,
+  runnable = runnable
+)
