@@ -41,9 +41,9 @@ seconds to attach. Thereafter, Stoic plugins typically run in less than a second
 3. When you don't specify a package, Stoic injects itself into `com.squareup.stoic.demoapp.withoutsdk`
    by default - a simple app bundled with Stoic. Run `stoic --pkg <your-app> helloworld` to inject into your
    own app instead.
-4. Initialize configuration: `stoic init-config` (this initializes `~/.config/stoic`)
-5. Run a plugin that you can modify: `stoic scratch`
-6. Open up `~/.config/stoic/plugin` with Android Studio to modify this plugin and explore what Stoic can do.
+4. Create a new plugin: `stoic plugin --new scratch`
+5. Run your plugin with: `stoic scratch`
+6. Open up `~/.config/stoic/plugin/scratch` with Android Studio to modify this plugin and explore what Stoic can do.
 
 Stoic works on any API 26+ Android device / emulator, with any debuggable app (that I've tested so far).
 

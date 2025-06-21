@@ -17,7 +17,7 @@ fi
 
 "$script_dir"/shellcheck.sh
 "$script_dir"/test-demo-app-without-sdk.sh
-"$script_dir"/test-init-config.sh
+"$script_dir"/test-plugin-new.sh
 "$script_dir"/test-without-config.sh
 
 # TODO: these tests require functionality not available on older versions of

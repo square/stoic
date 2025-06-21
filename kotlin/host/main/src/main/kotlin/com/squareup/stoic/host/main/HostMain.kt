@@ -51,8 +51,6 @@ import kotlin.system.exitProcess
 
 var isGraal: Boolean = false
 
-// init-config populates th usr dirs
-// TODO: we should publish our SDK jars to maven instead of copying them during init-config
 lateinit var stoicHostUsrConfigDir: String
 lateinit var stoicHostUsrPluginSrcDir: String
 lateinit var stoicHostUsrSdkDir: String
@@ -316,73 +314,77 @@ class RsyncCommand(val entrypoint: Entrypoint) : CoreCliktCommand(name = "rsync"
 }
 
 class InitConfigCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic init-config") {
+  init {
+    context {
+      allowInterspersedArgs = false
+    }
+  }
+  override val treatUnknownOptionsAsArgs = true
   override fun help(context: Context): String {
     return """
-      initializes ~/.config/stoic
+      Stoic used to provide an init-config command, but it's not longer necessary, so it has been
+      removed.
     """.trimIndent()
   }
 
+  val initConfigArgsArgs by argument().multiple()
   override fun run() {
-    entrypoint.verifyOptions("init-config", listOf("--verbose", "--debug"))
-
-    val buildToolsVersion = StoicProperties.ANDROID_BUILD_TOOLS_VERSION
-    val targetApiLevel = StoicProperties.ANDROID_TARGET_SDK
-
-    checkRequiredSdkPackages(
-      "build-tools;$buildToolsVersion",
-      "platforms;android-$targetApiLevel")
-
-    ProcessBuilder("mkdir", "-p", stoicHostUsrConfigDir).inheritIO().waitFor(0)
-    ProcessBuilder(
-      "rsync",
-      "--archive",
-      "--ignore-existing",
-      "$stoicReleaseDir/template/usr_config/",
-      "$stoicHostUsrConfigDir/")
-      .inheritIO().waitFor(0)
-
-    ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoic-android-plugin-sdk.jar", "$stoicHostUsrSdkDir/")
-      .inheritIO().waitFor(0)
-    ProcessBuilder("rsync", "$stoicReleaseDir/jar/stoic-android-plugin-sdk-sources.jar", "$stoicHostUsrSdkDir/")
-      .inheritIO().waitFor(0)
-
-    newPlugin("scratch", ignoreExisting = true)
-
-    println("""
-      User config initialized!
-      
-      Complete the following tutorial steps to familiarize yourself with Stoic:
-      1. Connect an Android device (if you haven't done so already)
-      2. Run `stoic helloworld` from the command-line
-      3. Run `stoic scratch` from the command-line, then open it up in Android Studio and play around
-         a) Android Studio -> File -> Open
-         b) Cmd+Shift+G
-         c) ~/.config/stoic/plugin
-         d) Open
-         e) Project -> plugin -> scratch -> Main.kt
-         f) Make some edits and save
-         g) Run `stoic scratch` again.
-      4. Run `stoic --pkg *package* appexitinfo`, replacing `*package*` with your own Android app.
-    """.trimIndent())
+    echoFormattedHelp()
+    throw CliktError()
   }
 }
 
-class NewPluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic new-plugin") {
+class PluginCommand(val entrypoint: Entrypoint) : CliktCommand(name = "stoic plugin") {
   override fun help(context: Context): String {
     return """
       Create a new plugin
     """.trimIndent()
   }
 
+  val isNew by option("--new", "-n").flag()
+  val isEdit by option("--edit", "-e").flag()
+
+  // TODO: support `stoic plugin --list`
+
   val pluginName by argument("name")
 
   override fun run() {
-    entrypoint.verifyOptions("new-plugin", listOf("--verbose", "--debug"))
+    entrypoint.verifyOptions("plugin", listOf("--verbose", "--debug"))
 
-    val usrPluginSrcDir = newPlugin(pluginName)
+    // Ensure the SDK is up-to-date
+    syncSdk()
 
-    System.err.println("New plugin src written to $usrPluginSrcDir")
-    System.err.println("Run it with: stoic $pluginName")
+    if (isNew) {
+      val usrPluginSrcDir = newPlugin(pluginName)
+      System.err.println("New plugin src written to $usrPluginSrcDir")
+      System.err.println("Run it with: stoic $pluginName")
+    }
+
+    if (isEdit) {
+      val usrPluginSrcDir = File("$stoicHostUsrPluginSrcDir/$pluginName")
+      if (!usrPluginSrcDir.exists()) {
+        throw PithyException("$usrPluginSrcDir does not exist")
+      }
+
+      val stoicEditor = System.getenv("STOIC_EDITOR")
+      val editor = System.getenv("EDITOR")
+      val resolvedEditor = if (!stoicEditor.isNullOrBlank()) {
+        stoicEditor
+      } else if (!editor.isNullOrBlank()) {
+        editor
+      } else {
+        throw PithyException("""
+          Please export STOIC_EDITOR or EDITOR (e.g. `export STOIC_EDITOR=vim`)
+          Or, you can edit $usrPluginSrcDir directly.
+        """.trimIndent())
+      }
+
+      val srcMain = "$usrPluginSrcDir/src/main/kotlin/Main.kt"
+      val srcGradle = "$usrPluginSrcDir/build.gradle.kts"
+      ProcessBuilder(resolvedEditor, srcMain, srcGradle)
+        .inheritIO()
+        .waitFor(0)
+    }
   }
 }
 
@@ -417,6 +419,15 @@ fun newPlugin(pluginName: String, ignoreExisting: Boolean = false): File {
   File(usrPluginSrcDir, ".stoic_template_version").writeText(StoicProperties.STOIC_VERSION_NAME)
 
   return usrPluginSrcDir
+}
+
+// This will go away once we publish the jars to maven
+fun syncSdk() {
+  // Ensure the parent directory has been created
+  File(stoicHostUsrPluginSrcDir).mkdirs()
+  ProcessBuilder("rsync", "--archive", "$stoicReleaseDir/sdk/", "$stoicHostUsrSdkDir/")
+    .inheritIO()
+    .waitFor(0)
 }
 
 
@@ -469,7 +480,7 @@ fun runList(entrypoint: Entrypoint): Int {
     throw UsageError("`stoic --list` doesn't take positional arguments")
   } else if (entrypoint.isTool) {
     // TODO: deduplicate this list with the one in runTool
-    listOf("init-config", "new-plugin").forEach {
+    listOf("plugin").forEach {
       println(it)
     }
   } else {
@@ -524,7 +535,7 @@ fun runTool(entrypoint: Entrypoint): Int {
     "shell" -> ShellCommand(entrypoint)
     "rsync" -> RsyncCommand(entrypoint)
     "init-config" -> InitConfigCommand(entrypoint)
-    "new-plugin" -> NewPluginCommand(entrypoint)
+    "plugin" -> PluginCommand(entrypoint)
     "help" -> {
       entrypoint.echoFormattedHelp()
       return 0
@@ -737,6 +748,9 @@ fun resolveUserOrDemo(entrypoint: Entrypoint): Pair<File, String>? {
   if (entrypoint.userAllowed) {
     val usrPluginSrcDir = "$stoicHostUsrPluginSrcDir/$pluginName"
     if (File(usrPluginSrcDir).exists()) {
+      // Ensure the SDK is up-to-date
+      syncSdk()
+
       withStatus("Compiling...") {
         val outputPath = logBlock(LogLevel.INFO, { "building $usrPluginSrcDir" }) {
           logInfo { "building plugin" }

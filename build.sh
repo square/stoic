@@ -10,6 +10,7 @@ stoic_core_sync_dir="$stoic_release_dir/sync"
 source "$stoic_dir/prebuilt/stoic.properties"
 
 mkdir -p "$stoic_release_dir"/jar
+mkdir -p "$stoic_release_dir"/sdk
 mkdir -p "$stoic_release_dir"/bin
 rsync --archive "$stoic_dir"/prebuilt/ "$stoic_release_dir"/
 
@@ -77,8 +78,8 @@ export GRAALVM_HOME
 
 cp host/main/build/libs/main.jar "$stoic_release_dir"/jar/stoic-host-main.jar
 cp host/main/build/native/nativeCompile/stoic "$stoic_release_dir"/bin/
-cp android/plugin-sdk/build/libs/plugin-sdk.jar "$stoic_release_dir"/jar/stoic-android-plugin-sdk.jar
-cp android/plugin-sdk/build/libs/plugin-sdk-sources.jar "$stoic_release_dir"/jar/stoic-android-plugin-sdk-sources.jar
+cp android/plugin-sdk/build/libs/plugin-sdk.jar "$stoic_release_dir"/sdk/stoic-android-plugin-sdk.jar
+cp android/plugin-sdk/build/libs/plugin-sdk-sources.jar "$stoic_release_dir"/sdk/stoic-android-plugin-sdk-sources.jar
 cp android/server/attached/build/libs/attached.dex.jar "$stoic_core_sync_dir/stoic/stoic-server-attached.dex.jar"
 cp demo-app/without-sdk/build/outputs/apk/debug/without-sdk-debug.apk "$stoic_core_sync_dir/apk/stoic-demo-app-without-sdk-debug.apk"
 
@@ -123,15 +124,10 @@ if [ -z "$stoic_path" ]; then
     >&2 echo
     >&2 echo "    echo export PATH=\$PATH:$stoic_dir/out/rel/bin >> $config_file && source $config_file"
     >&2 echo "    stoic init-config"
-    >&2 echo
 elif [ "$stoic_path" != "$stoic_dir/out/rel/bin/stoic" ]; then
     >&2 echo "WARNING: Your PATH is currently including stoic from: $stoic_path"
     >&2 echo "The version you just built is in \`$stoic_dir/out/rel/bin\`"
-    >&2 echo "Next, please run: \`$stoic_dir/out/rel/bin/stoic init-config\`"
-    >&2 echo
 else
-    >&2 echo "Next, please run:"
-    >&2 echo
-    >&2 echo "    stoic init-config"
-    >&2 echo
+    >&2 echo "stoic correctly resolves to the version you just built."
 fi
+>&2 echo
